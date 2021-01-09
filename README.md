@@ -8,7 +8,7 @@ Cute Chess was written by Ilari Pihlajisto, Arto Jonsson and [contributors](http
 
 This branch, forked by windfishballad, modifies CuteChess in order to play the western board chess variants by the rules of reset-mobility, also known as [r-Mobility](https://wiki.chessdom.org/R-Mobility).
 
-[r-Mobility](https://wiki.chessdom.org/R-Mobility), invented by Aloril, is a natural generalization of the scoring of Chess (an is also an extension to Lasker Chess scoring).
+[r-Mobility](https://wiki.chessdom.org/R-Mobility), invented by Aloril, is a natural generalization of the scoring of Chess (an is also generalization of Lasker Chess scoring).
 
 In points scoring, it allows for more granular results than 1-0 or 0.5-0.5, thinning the optimal play tree by an order of magnitude (while remaining fully included in regular chess optimal play tree), and keeping engames which are drawn by classical rules interesting.
 
