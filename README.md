@@ -1,63 +1,30 @@
-# Cute Chess
-
-![GitHub CI](https://github.com/cutechess/cutechess/workflows/build%20cutechess/badge.svg)
+# Cute Chess fork for reset-Mobility (r-Mobility) chess
 
 Cute Chess is a graphical user interface, command-line interface and a library
 for playing chess. Cute Chess is written in C++ using the [Qt
 framework](https://www.qt.io/).
 
+Cute Chess was written by Ilari Pihlajisto, Arto Jonsson and [contributors](https://github.com/cutechess/cutechess/graphs/contributors)
+
+This branch, forked by windfishballad, modifies CuteChess in order to play the western board chess variants by the rules of reset-mobility, also known as [r-Mobility](https://wiki.chessdom.org/R-Mobility).
+
+[r-Mobility](https://wiki.chessdom.org/R-Mobility), invented by Aloril, is a natural extension of the rules of Chess.
+
+In points scoring, it allows for more granular results than 1-0 or 0.5-0.5, thinning the optimal play tree by an order of magnitude (while remaining fully included in regular chess optimal play tree), and keeping engames which are drawn by classical rules interesting.
+
+In Komi scoring, it allows for drawless chess. 
+
 ## Installation
 
-### Binaries
-
-See the [Releases](https://github.com/cutechess/cutechess/releases) page.
-
-### Building from source
-
-Cute Chess requires Qt 5.11 or greater, a compiler with C++11 support and `qmake`.
-Cute Chess depends on the following Qt 5 modules:
-
-* qt5-widgets
-* qt5-svg
-* qt5-concurrent
-* qt5-printsupport
-* qt5-testlib (optional: unit tests)
-
-Run these commands:
-
-    $ qmake
-    $ make
-
-If you are using the Visual C++ compiler replace `make` with `nmake`.
-
-Documentation is available as Unix manual pages in the `docs/` directory.
-
-For detailed build instruction for various operating systems, see the
-[Building from source](https://github.com/cutechess/cutechess/wiki/Building-from-source)
-wiki page.
-
-## Running
-
-The `cutechess` program is the graphical user interface of Cute Chess.
-It can be run either from command-line or from your desktop environment's
-application launcher.
-
-The `cutechess-cli` program is the command-line interface for playing
-games between chess engines. For example, to play ten games between two Sloppy
-engines (assuming `sloppy` is in PATH) with a time control of 40 moves in 60
-seconds:
-
-    $ cutechess-cli -engine cmd=sloppy -engine cmd=sloppy -each proto=xboard tc=40/60 -rounds 10
-
-See `cutechess-cli -help` for descriptions of the supported options or manuals
-for full documentation.
+Please refer to the main cutechess [page](https://github.com/cutechess/cutechess).
 
 ## License
 
-Cute Chess is released under the GPLv3+ license except for the components in
-the `projects/lib/components` and `projects/gui/components` directories which
-are released under the MIT License.
+Base cutechess code (except for the components in the projects/lib/components and the projects/gui components which are released under the MIT license) and r-Mobility additional code are released under the GPLv3+ license.
 
 ## Credits
 
-Cute Chess was written by Ilari Pihlajisto, Arto Jonsson and [contributors](https://github.com/cutechess/cutechess/graphs/contributors)
+Base cutechess code was written by Ilari Pihlajisto, Arto Jonsson and [contributors](https://github.com/cutechess/cutechess/graphs/contributors).
+Additional r-Mobility support code, and required modifications to base cose,  was written by windfishballad. 
+
+
