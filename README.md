@@ -160,6 +160,7 @@ Base cutechess code (except for the components in the `projects/lib/components` 
 
 ## Credits
 
+Reset-Mobility (aka rMobility) was invnted by Aloril.
 Base cutechess code was written by Ilari Pihlajisto, Arto Jonsson and [contributors](https://github.com/cutechess/cutechess/graphs/contributors).
 Additional r-Mobility support code, and required modifications to base cose,  was written by windfishballad. 
 
