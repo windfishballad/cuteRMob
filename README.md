@@ -57,7 +57,7 @@ Note that the overriden 50-moves rule still applies by default even if scoring i
 ### Harmonic
 
 Set by `-rMobilityType harmonic`
-Score is 0.5+0.5/(1+2G). It makes fighting for the best G-score in high scoe games still relevant (contrary to Exponential), but the tradeoff is that it makes achieving low scores like stalemate, G1.0 or G1.5 less important.
+Score is 0.5+/-0.5/(1+2G). It makes fighting for the best G-score in high scoe games still relevant (contrary to Exponential), but the tradeoff is that it makes achieving low scores like stalemate, G1.0 or G1.5 less important.
 
 ### RMobility Winner
 
@@ -70,7 +70,7 @@ If G score is lower than cutoff (set in cli with `-rMobilityCutoff` option, for 
 
 Set by `-rMobilityType komi`
 
-The komi is read from the opening (only compatible with PGN files), for example `[Komi "G4.25"]`, `[Komi "-G5.75"]`, `"[Komi "G2.0"]"`
+The komi is read from the opening (only compatible with PGN files), for example `[Komi "G4.25"]`, `[Komi "-G5.75"]`, `[Komi "G2.0"]`
 
 If no opening is provided, or if does not contain the `[Komi..` tag, a default komi will be used, which is set using`-defaultKomi`, for example:
 `-defaultKomi g5.0`, `-defaultKomi mg5.75` (m has to be used in lieu of - sign when setting the komi in cli). If this option is not set, default value is G5.75. it cannot be set in the GUI, therefore G5.75 will always be used if the opening does not provide a komi.
