@@ -19,6 +19,7 @@
 #include <QStringList>
 #include "westernzobrist.h"
 #include "boardtransition.h"
+#include <string>
 
 
 namespace Chess {
@@ -30,6 +31,7 @@ WesternBoard::WesternBoard(WesternZobrist* zobrist)
 	  m_enpassantSquare(0),
 	  m_enpassantTarget(0),
 	  m_plyOffset(0),
+	  m_gResult(initialResult),
 	  m_reversibleMoveCount(0),
 	  m_kingCanCapture(true),
 	  m_hasCastling(true),
@@ -37,7 +39,9 @@ WesternBoard::WesternBoard(WesternZobrist* zobrist)
 	  m_hasEnPassantCaptures(true),
 	  m_pawnAmbiguous(false),
 	  m_multiDigitNotation(false),
-	  m_zobrist(zobrist)
+	  m_zobrist(zobrist),
+	  m_bareKingCount(0)
+
 {
 	setPieceType(Pawn, tr("pawn"), "P");
 	setPieceType(Knight, tr("knight"), "N", KnightMovement);
@@ -616,6 +620,11 @@ QString WesternBoard::vFenString(FenNotation notation) const
 	fen += ' ';
 	fen += QString::number((m_history.size() + m_plyOffset) / 2 + 1);
 
+	// Accreted g-Score
+	fen+= ' ';
+	fen+=Chess::gValueToString(m_gResult);
+
+
 	return fen;
 }
 
@@ -813,6 +822,7 @@ bool WesternBoard::vSetFenString(const QStringList& fen)
 		if (!ok || tmp < 1)
 			return false;
 		m_plyOffset = 2 * (tmp - 1);
+		++token;
 	}
 	else
 		m_plyOffset = 0;
@@ -820,6 +830,11 @@ bool WesternBoard::vSetFenString(const QStringList& fen)
 	if (m_sign != 1)
 		m_plyOffset++;
 
+	// Read accreted G-score
+	if (token !=fen.end())
+	{
+		m_gResult=parseGValue(token[0]);
+	}
 	m_history.clear();
 	return true;
 }
@@ -898,7 +913,7 @@ void WesternBoard::vMakeMove(const Move& move, BoardTransition* transition)
 	Q_ASSERT(target != 0);
 
 	MoveData md = { capture, epSq, epTgt, m_castlingRights,
-			NoCastlingSide, m_reversibleMoveCount };
+			NoCastlingSide, m_reversibleMoveCount, m_gResult, m_bareKingCount};
 
 	if (source == 0)
 	{
@@ -1010,6 +1025,8 @@ void WesternBoard::vMakeMove(const Move& move, BoardTransition* transition)
 	}
 
 	setSquare(target, Piece(side, pieceType));
+
+
 	if (clearSource)
 		setSquare(source, Piece::NoPiece);
 
@@ -1017,6 +1034,9 @@ void WesternBoard::vMakeMove(const Move& move, BoardTransition* transition)
 		m_reversibleMoveCount++;
 	else
 		m_reversibleMoveCount = 0;
+
+
+
 
 	m_history.append(md);
 	m_sign *= -1;
@@ -1034,6 +1054,8 @@ void WesternBoard::vUndoMove(const Move& move)
 	setEnpassantSquare(md.enpassantSquare, md.enpassantTarget);
 	m_reversibleMoveCount = md.reversibleMoveCount;
 	m_castlingRights = md.castlingRights;
+	m_gResult=md.gResult;
+	m_bareKingCount=md.bareKingCount;
 
 	CastlingSide cside = md.castlingSide;
 	if (cside != NoCastlingSide)
@@ -1385,76 +1407,101 @@ int WesternBoard::reversibleMoveCount() const
 	return m_reversibleMoveCount;
 }
 
+rMobResult WesternBoard::gResult() const
+{
+	return m_gResult;
+}
 Result WesternBoard::result()
 {
 	QString str;
 
-	// Checkmate/Stalemate
-	if (!canMove())
+	int legalMoves=countLegalMoves();
+	int isInCheck=inCheck(sideToMove());
+
+	int newGScore=2*legalMoves+(!isInCheck);
+
+
+	if(!m_reversibleMoveCount)
 	{
-		if (inCheck(sideToMove()))
+		m_gResult.gSide=sideToMove().opposite();
+		m_gResult.gScore=newGScore;
+	}
+	else
+	{
+		//If m_isLegacy, 50mr is tradititonal and last ply not counted for rMob. Otherwise, resets at each new objective below the draw cutoff.
+
+		if(newGScore < m_gResult.gScore &&((!m_isLegacy) || m_reversibleMoveCount<100))
+		{
+			m_gResult.gScore=newGScore;
+			m_gResult.gSide=sideToMove().opposite();
+			if(!m_isLegacy && (newGScore < m_gCutoff)) m_reversibleMoveCount=0;
+		}
+	}
+
+	// Checkmate/Stalemate
+	if (m_gResult.gScore<2)
+	{
+		if (m_gResult.gScore==0)
 		{
 			Side winner = sideToMove().opposite();
 			str = tr("%1 mates").arg(winner.toString());
 
-			return Result(Result::Win, winner, str);
+			return Result(m_gResult, str);
 		}
 		else
 		{
-			str = tr("Draw by stalemate");
-			return Result(Result::Draw, Side::NoSide, str);
+			Side winner = sideToMove().opposite();
+			str = tr("%1 stalemates").arg(winner.toString());
+			return Result(m_gResult, str);
 		}
 	}
 
-	// Insufficient mating material
+
+
+	//Insufficient Material Rule - if K vs K stop if G8.5 for two plies in a row
+
 	int material = 0;
-	bool bishops[] = { false, false };
-	for (int i = 0; i < arraySize(); i++)
+	for(int i=0; i<arraySize();i++)
 	{
 		const Piece& piece = pieceAt(i);
 		if (!piece.isValid())
 			continue;
 
-		switch (piece.type())
+		if(piece.type() != King)
 		{
-		case King:
-			break;
-		case Bishop:
-		{
-			auto color = chessSquare(i).color();
-			if (color != Square::NoColor && !bishops[color])
-			{
-				material++;
-				bishops[color] = true;
-			}
-			break;
-		}
-		case Knight:
-			material++;
-			break;
-		default:
-			material += 2;
+			++material;
 			break;
 		}
 	}
-	if (material <= 1)
+
+	if (material == 0)
 	{
-		str = tr("Draw by insufficient mating material");
-		return Result(Result::Draw, Side::NoSide, str);
+		if(legalMoves==8) ++m_bareKingCount;
+		else m_bareKingCount=0;
+		if(m_bareKingCount>=2)
+		{
+			str = tr("End by K vs K G8.5 rule");
+			return Result(m_gResult, str);
+		}
 	}
+
+
+
 
 	// 50 move rule
 	if (m_reversibleMoveCount >= 100)
 	{
-		str = tr("Draw by fifty moves rule");
-		return Result(Result::Draw, Side::NoSide, str);
+		str = tr("End by fifty moves rule");
+
+
+		return Result(m_gResult,str);
 	}
 
 	// 3-fold repetition
 	if (repeatCount() >= 2)
 	{
-		str = tr("Draw by 3-fold repetition");
-		return Result(Result::Draw, Side::NoSide, str);
+		str = tr("End by 3-fold repetition");
+		return Result(m_gResult,str);
 	}
 
 	return Result();

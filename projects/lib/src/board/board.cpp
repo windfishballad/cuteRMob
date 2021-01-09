@@ -61,7 +61,9 @@ Board::Board(Zobrist* zobrist)
 	  m_maxPieceSymbolLength(1),
 	  m_key(0),
 	  m_zobrist(zobrist),
-	  m_sharedZobrist(zobrist)
+	  m_sharedZobrist(zobrist),
+	  m_gCutoff(defaultCutoff),
+	  m_isLegacy(false)
 {
 	Q_ASSERT(zobrist != nullptr);
 
@@ -881,6 +883,21 @@ bool Board::canMove()
 	return false;
 }
 
+int Board::countLegalMoves()
+{
+	QVarLengthArray<Move> moves;
+	generateMoves(moves);
+
+	int count=0;
+	for (int i = 0; i < moves.size(); i++)
+	{
+		if (vIsLegalMove(moves[i]))
+			++count;
+	}
+
+	return count;
+}
+
 QVector<Move> Board::legalMoves()
 {
 	QVarLengthArray<Move> moves;
@@ -902,6 +919,26 @@ Result Board::tablebaseResult(unsigned int* dtm) const
 {
 	Q_UNUSED(dtm);
 	return Result();
+}
+
+void Board::setCutoff(int cutoff)
+{
+	m_gCutoff=cutoff;
+}
+
+void Board::setLegacy(bool isLegacy)
+{
+	m_isLegacy=isLegacy;
+}
+
+int Board::gCutoff() const
+{
+	return m_gCutoff;
+}
+
+bool Board::isLegacy() const
+{
+	return m_isLegacy;
 }
 
 } // namespace Chess

@@ -228,7 +228,7 @@ class LIB_EXPORT WesternBoard : public Board
 			int rookSquare[2][2];
 		};
 
-		// Data for reversing/unmaking a move
+		// Data for reversing a move
 		struct MoveData
 		{
 			Piece capture;
@@ -237,6 +237,8 @@ class LIB_EXPORT WesternBoard : public Board
 			CastlingRights castlingRights;
 			CastlingSide castlingSide;
 			int reversibleMoveCount;
+			rMobResult gResult;
+			int bareKingCount;
 		};
 
 		void generateCastlingMoves(QVarLengthArray<Move>& moves) const;
@@ -256,13 +258,19 @@ class LIB_EXPORT WesternBoard : public Board
 		inline int pawnPushOffset(const PawnStep& ps,
 					  int sign) const;
 
+		rMobResult gResult() const;
+
 		int m_arwidth;
 		int m_sign;
 		int m_kingSquare[2];
 		int m_enpassantSquare;
 		int m_enpassantTarget;
 		int m_plyOffset;
+		Chess::rMobResult m_gResult;
+
 		int m_reversibleMoveCount;
+
+
 		bool m_kingCanCapture;
 		bool m_hasCastling;
 		bool m_pawnHasDoubleStep;
@@ -273,6 +281,8 @@ class LIB_EXPORT WesternBoard : public Board
 		CastlingRights m_castlingRights;
 		int m_castleTarget[2][2];
 		const WesternZobrist* m_zobrist;
+
+		int m_bareKingCount;
 
 		QVarLengthArray<int> m_knightOffsets;
 		QVarLengthArray<int> m_bishopOffsets;

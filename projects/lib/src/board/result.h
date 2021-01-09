@@ -23,7 +23,57 @@
 #include <QMetaType>
 #include <QCoreApplication>
 
+
+
 namespace Chess {
+
+enum rMobScoring
+		{
+			Classical,
+			Exponential,
+			Harmonic,
+			AllOrNone,
+			Komi
+		};
+
+int parseCutoff(const QString& str);
+
+QString rMobScoringName(const rMobScoring& rMobType);
+
+
+
+struct rMobResult
+{
+	int gScore;
+	Side::Type gSide;
+};
+
+QString gValueToString(const rMobResult& gResult);
+QString gValueToString(int gScore);
+rMobResult parseGValue(const QString& str);
+
+struct rMobKomi
+{
+	int komi;
+	Side::Type gSide;
+};
+
+rMobKomi parseKomi(const QString& str);
+QString komiToString(const rMobKomi& komi);
+
+
+class LIB_EXPORT rScoring
+{
+	public:
+
+		explicit rScoring(rMobScoring type);
+
+		qreal rValue(int gScore);
+
+
+	private:
+		qreal m_rValue[438];
+};
 
 /*!
  * \brief The result of a chess game
@@ -60,7 +110,8 @@ class LIB_EXPORT Result
 			//! No result. The game may continue.
 			NoResult,
 			//! Result error, caused by an invalid result string.
-			ResultError
+			ResultError,
+
 		};
 
 		/*!
@@ -72,9 +123,16 @@ class LIB_EXPORT Result
 		 *        class has a preset description for \a type, this
 		 *        additional description is appended to it.
 		 */
-		explicit Result(Type type = NoResult,
-				Side winner = Side(),
+		explicit Result(rMobResult gResult,
 				const QString& description = QString());
+
+		explicit Result(Type type=NoResult, Side winner=Side(), const QString& description = QString());
+
+		explicit Result(Type type,
+						Side winner,
+						rMobResult gResult,
+						const QString& description = QString());
+
 		/*! Creates a new result from a string. */
 		explicit Result(const QString& str);
 
@@ -91,6 +149,10 @@ class LIB_EXPORT Result
 		Side winner() const;
 		/*! Returns the losing side, or NoSide if there's no loser. */
 		Side loser() const;
+
+
+		rMobResult gResult() const;
+
 
 		/*! Returns the type of the result. */
 		Type type() const;
@@ -109,13 +171,21 @@ class LIB_EXPORT Result
 		 */
 		QString toVerboseString() const;
 
+		QString toLegacyString() const;
+
 	private:
 		Type m_type;
 		Side m_winner;
+
+		rMobResult m_gResult;
 		QString m_description;
 };
 
 } // namespace Chess
+
+extern const int defaultCutoff;
+extern const Chess::rMobKomi defaultKomi;
+extern const Chess::rMobResult initialResult;
 
 Q_DECLARE_METATYPE(Chess::Result)
 

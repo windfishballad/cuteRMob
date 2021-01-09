@@ -17,15 +17,73 @@
 */
 
 #include "result.h"
+#include <cmath>
 
+extern const int defaultCutoff=12;
+extern const Chess::rMobKomi defaultKomi={23, Chess::Side::White};
+extern const Chess::rMobResult initialResult={436,Chess::Side::White};
 
 namespace Chess {
+
+
+
+rScoring::rScoring(rMobScoring type)
+{
+	if(type == Exponential)
+	{
+		qreal addOn=0.5;
+		for(int i=0;i<438;i++)
+		{
+			m_rValue[i]=0.5+addOn;
+			addOn=addOn*0.5;
+		}
+
+	}
+	else if(type == Harmonic)
+	{
+		for(int i=0;i<438;i++)
+		{
+			m_rValue[i]=0.5+0.5/(1+i);
+		}
+	}
+
+}
+
+
+qreal rScoring::rValue(int gScore)
+{
+	return m_rValue[gScore];
+}
+
+Result::Result(Type type, Side winner, rMobResult gResult, const QString& description)
+	: m_type(type),
+	  m_winner(winner),
+	  m_gResult(gResult),
+	  m_description(description)
+{
+}
 
 Result::Result(Type type, Side winner, const QString& description)
 	: m_type(type),
 	  m_winner(winner),
 	  m_description(description)
 {
+	m_gResult=rMobResult{0,winner};
+}
+Result::Result(rMobResult gResult, const QString& description)
+	: m_gResult(gResult),
+	  m_description(description)
+{
+	if(gResult.gScore==0)
+	{
+		m_type=Win;
+		m_winner=gResult.gSide;
+	}
+	else
+	{
+		m_type=Draw;
+		m_winner=Chess::Side::NoSide;
+	}
 }
 
 Result::Result(const QString& str)
@@ -164,20 +222,177 @@ QString Result::description() const
 	return str;
 }
 
+rMobResult Result::gResult() const
+{
+	return m_gResult;
+}
+
+
+
 QString Result::toShortString() const
 {
 	if (m_type == NoResult || m_type == ResultError)
 		return "*";
-	if (m_winner == Side::White)
-		return "1-0";
-	if (m_winner == Side::Black)
-		return "0-1";
+
+	QString res;
+
+	if (m_gResult.gSide == Side::White)
+	{
+		res=tr("G%1.%2").arg(m_gResult.gScore/2).arg(5*(m_gResult.gScore%2));
+	}
+	else if(m_gResult.gSide== Side::Black)
+	{
+		res=tr("-G%1.%2").arg(m_gResult.gScore/2).arg(5*(m_gResult.gScore%2));
+	}
+	else
+	{
+		res=tr("*");
+	}
+
+	return res;
+}
+
+QString Result::toLegacyString() const
+{
+	if (m_type == NoResult || m_type == ResultError)
+		return "*";
+
+
+	if(m_type==Win)
+	{
+		return (m_winner==Chess::Side::White) ? "1-0" : "0-1";
+	}
+
 	return "1/2-1/2";
 }
+
 
 QString Result::toVerboseString() const
 {
 	return toShortString() + QString(" {") + description() + "}";
 }
 
-} // namespace Chess
+rMobResult parseGValue(const QString& str)
+{
+	QStringList parts=str.split('.');
+	Side::Type gSide;
+	int gScore;
+	if((parts.at(0).startsWith("G") || parts.at(0).startsWith("g")) && (parts.at(0).size()>=2))
+	{
+		gSide=Side::White;
+		gScore=2*parts.at(0).mid(1).toInt();
+		if(parts.size()>=2 && parts.at(1).size()>=1)
+			gScore+=parts.at(1).left(1).toInt()/5;
+	}
+	else if((parts.at(0).startsWith("-G") || parts.at(0).startsWith("-g") || parts.at(0).startsWith("mG") || parts.at(0).startsWith("mg")) && parts.at(0).size()>=3)
+	{
+		gSide=Side::Black;
+		gScore=2*parts.at(0).mid(2).toInt();
+		if(parts.size()>=2 && parts.at(1).size()>=1)
+			gScore+=parts.at(1).left(1).toInt()/5;
+	}
+	else
+	{
+		qWarning("Could not parse; defaulting to G218.5");
+		gSide=Side::White;
+		gScore=437;
+	}
+	return rMobResult{gScore,gSide};
+}
+
+rMobKomi parseKomi(const QString& str)
+{
+	Side::Type komiSide;
+	int komi;
+	QStringList parts=str.split('.');
+	if((parts.at(0).startsWith("G") || parts.at(0).startsWith("g")) && parts.at(0).size()>=2)
+	{
+		komiSide=Side::White;
+		komi=4*parts.at(0).mid(1).toInt();
+		if(parts.size()>=2 && parts.at(1).size()>=1)
+		{
+			if(parts.at(1).left(1)=="2") komi+=1;
+			else if(parts.at(1).left(1)=="5") komi+=2;
+			else if(parts.at(1).left(1)=="7") komi+=3;
+		}
+	}
+	else if((parts.at(0).startsWith("-G") || parts.at(0).startsWith("-g") || parts.at(0).startsWith("mG") || parts.at(0).startsWith("mg")) && parts.at(0).size()>=3)
+	{
+		komiSide=Side::Black;
+		komi=4*parts.at(0).mid(2).toInt();
+		if(parts.size()>=2 && parts.at(1).size() >= 1)
+		{
+			if(parts.at(1).left(1)=="2") komi+=1;
+			else if(parts.at(1).left(1)=="5") komi+=2;
+			else if(parts.at(1).left(1)=="7") komi+=3;
+		}
+	}
+	else
+	{
+		qWarning("Could not parse; defaulting to G5.75 komi");
+		komiSide=Side::White;
+		komi=23;
+	}
+	return rMobKomi{komi,komiSide};
+
+}
+
+
+int parseCutoff(const QString& str)
+{
+	return parseGValue(str).gScore;
+}
+
+
+
+
+QString komiToString(const rMobKomi& komi)
+{
+	QString str=(komi.gSide==Chess::Side::White ? "G" : "-G");
+	str+=QString::number(komi.komi/4)+".";
+	if(komi.komi%4 ==0) str+=QString::number(0);
+	else if(komi.komi%4 ==1) str+=QString::number(25);
+	else if(komi.komi%4 == 2) str+=QString::number(5);
+	else str+=QString::number(75);
+
+	return str;
+}
+
+QString gValueToString(const rMobResult& gResult)
+{
+	QString str=(gResult.gSide==Chess::Side::White ? "G" : "-G");
+	str+=QString::number(gResult.gScore/2)+"."+QString::number((gResult.gScore%2)*5);
+
+	return str;
+}
+
+QString gValueToString(int gScore)
+{
+	return gValueToString(rMobResult{gScore,Side::Type::White});
+}
+
+QString rMobScoringName(const rMobScoring& rMobType)
+{
+	switch(rMobType)
+	{
+	case Classical:
+		return "Classical";
+
+	case Harmonic:
+		return "Harmonic";
+
+	case AllOrNone:
+		return "RMobility Winner";
+
+	case Komi:
+		return "Komi";
+
+	default:
+		return "Exponential";
+	}
+}
+
+
+
+}
+// namespace Chess

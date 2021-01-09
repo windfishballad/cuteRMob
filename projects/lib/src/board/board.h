@@ -297,6 +297,14 @@ class LIB_EXPORT Board
 		 */
 		virtual Result tablebaseResult(unsigned int* dtm = nullptr) const;
 
+		void setCutoff(int cutoff);
+
+		void setLegacy(bool isLegacy);
+
+		int gCutoff() const;
+
+		bool isLegacy() const;
+
 	protected:
 		/*!
 		 * Initializes the variant.
@@ -484,6 +492,9 @@ class LIB_EXPORT Board
 		 * Returns the size of the board array, including the padding
 		 * (the inaccessible wall squares).
 		 */
+		int countLegalMoves();
+		//count legal moves for r-mobility purpose
+
 		int arraySize() const;
 		/*! Returns the piece at \a square. */
 		Piece pieceAt(int square) const;
@@ -510,6 +521,8 @@ class LIB_EXPORT Board
 		void addToReserve(const Piece& piece, int count = 1);
 		/*! Removes a piece of type \a piece from the reserve. */
 		void removeFromReserve(const Piece& piece);
+
+
 
 	private:
 		struct PieceData
@@ -540,6 +553,10 @@ class LIB_EXPORT Board
 		QVarLengthArray<Piece> m_squares;
 		QVector<MoveData> m_moveHistory;
 		QVector<int> m_reserve[2];
+
+	protected:
+		int m_gCutoff;
+		bool m_isLegacy;
 };
 
 

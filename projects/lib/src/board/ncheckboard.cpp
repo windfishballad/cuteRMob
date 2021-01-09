@@ -82,7 +82,7 @@ Result NCheckBoard::result()
 	// Side wins if counter is zero
 	Side opp = sideToMove().opposite();
 	if (m_checksToWin[opp] == 0)
-		return Result(Result::Win, opp,
+		return Result(Result::Win, opp,Chess::rMobResult{0,opp},
 			      tr("%1 checks %2 times")
 			      .arg(opp.toString()).arg(checkLimit()));
 
