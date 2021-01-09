@@ -34,7 +34,7 @@ Justifiation for this rule is that if this occurs, in optimal play G-score of th
 
 The default implementation of the 50 move rules is that any reset OR any improvement to the best G-score since last reset zeroes the 50 moves counter. The improvement is only counted if it is strictly lower than the G-Score cutoff. The cutoff defaults to G6.0 and cannot be changed in the GUI. It is set in cli using the `-rMobilityCutoff` option, for example `-rMobilityCutoff g101.5`.
 
-The rationale is that being close to the 50 moves boundary would otherwise allow to enter sequences that could make a player lock a better G-Score, because their refutation would not be possible due to hitting the 50-moves rule.
+The rationale is that being close to the 50 moves boundary would otherwise allow to enter sequences that could make a player lock a better g-Score, because their refutation would not be possible due to hitting the 50-moves rule. A side effect is that some (but not all) tablebase cursed mates become actual mates, s improved G-scores on the path would reset the counter.
 
 However, including the option `-legacyMode` in cli makes the 50 moves rule stop the game in the usual way, to be used in case one of the engines does not support the new default 50-moves rule. Legacy mode is not available through the GUI.
 
