@@ -269,6 +269,10 @@ EngineMatch* parseMatch(const QStringList& args, QObject* parent)
 	parser.addOption("-site", QVariant::String, 1, 1);
 	parser.addOption("-wait", QVariant::Int, 1, 1);
 	parser.addOption("-seeds", QVariant::UInt, 1, 1);
+	parser.addOption("-rMobilityType",QVariant::String,0,1);
+	parser.addOption("-legacyMode",QVariant::Bool,0,0);
+	parser.addOption("-defaultKomi",QVariant::String,1,1);
+	parser.addOption("-rMobilityCutoff",QVariant::String,1,1);
 	if (!parser.parse())
 		return nullptr;
 
@@ -427,7 +431,7 @@ EngineMatch* parseMatch(const QStringList& args, QObject* parent)
 		// Interval for rating list updates
 		else if (name == "-ratinginterval")
 			match->setRatingInterval(value.toInt());
-		// Format of the result list
+		// Interval for rating list updates
 		else if (name == "-resultformat")
 		{
 			if (value == "help")
@@ -592,7 +596,7 @@ EngineMatch* parseMatch(const QStringList& args, QObject* parent)
 		else if (name == "-site")
 			tournament->setSite(value.toString());
 		// Set the random seed manually
-		else if (name == "-srand")
+		else if (name == " ")
 		{
 			uint seed = value.toUInt(&ok);
 			if (ok)
@@ -612,8 +616,38 @@ EngineMatch* parseMatch(const QStringList& args, QObject* parent)
 			if (ok)
 				tournament->setSeedCount(seedCount);
 		}
+		//What is the main r-mobility scoring mode
+		else if (name == "-rMobilityType")
+		{
+			QString val=value.toString();
+			if (val=="komi") tournament->setRMobType(Chess::Komi);
+			else if(val=="classical") tournament->setRMobType(Chess::Classical);
+			else if(val=="harmonic") tournament->setRMobType(Chess::Harmonic);
+			else if(val=="rMobilityWinner") tournament->setRMobType(Chess::AllOrNone);
+			else if(val=="exponential") tournament->setRMobType(Chess::Exponential);
+			else
+			{
+				qWarning("Could not understand rMobilityType, defaulting to Exponential");
+			}
+		}
+		else if (name == "-legacyMode")
+		{
+			tournament->setLegacy(true);
+		}
+		else if (name == "-defaultKomi")
+		{
+			QString str=value.toString();
+			tournament->setDefaultKomi(Chess::parseKomi(str));
+		}
+		else if (name == "-rMobilityCutoff")
+		{
+			QString str=value.toString();
+			tournament->setCutoff(Chess::parseCutoff(str));
+		}
 		else
+		{
 			qFatal("Unknown argument: \"%s\"", qUtf8Printable(name));
+		}
 
 		if (!ok)
 		{
@@ -757,5 +791,6 @@ int main(int argc, char* argv[])
 	QObject::connect(s_match, SIGNAL(finished()), &app, SLOT(quit()));
 
 	s_match->start();
+
 	return app.exec();
 }

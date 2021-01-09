@@ -46,6 +46,8 @@ class EngineMatch : public QObject
 		void start();
 		void stop();
 
+		Tournament* m_tournament;
+
 	signals:
 		void finished();
 
@@ -58,7 +60,7 @@ class EngineMatch : public QObject
 	private:
 		void printRanking();
 
-		Tournament* m_tournament;
+
 		bool m_debug;
 		int m_ratingInterval;
 		OpeningBook::AccessMode m_bookMode;

@@ -104,15 +104,28 @@ void EngineMatch::onGameStarted(ChessGame* game, int number)
 {
 	Q_ASSERT(game != nullptr);
 
-	qInfo("Started game %d of %d (%s vs %s)",
-	      number,
-	      m_tournament->finalGameCount(),
-	      qUtf8Printable(game->player(Chess::Side::White)->name()),
-	      qUtf8Printable(game->player(Chess::Side::Black)->name()));
+	if(m_tournament->rMobType()==Chess::Komi)
+	{
+		qInfo("Started game %d of %d (%s vs %s), komi %s",
+			  number,
+			  m_tournament->finalGameCount(),
+			  qUtf8Printable(game->player(Chess::Side::White)->name()),
+			  qUtf8Printable(game->player(Chess::Side::Black)->name()),
+			  qUtf8Printable(Chess::komiToString(game->komi())));
+	}
+	else
+	{
+		qInfo("Started game %d of %d (%s vs %s)",
+					  number,
+					  m_tournament->finalGameCount(),
+					  qUtf8Printable(game->player(Chess::Side::White)->name()),
+					  qUtf8Printable(game->player(Chess::Side::Black)->name()));
+	}
 }
 
 void EngineMatch::onGameFinished(ChessGame* game, int number)
 {
+
 	Q_ASSERT(game != nullptr);
 
 	Chess::Result result(game->result());
@@ -127,17 +140,59 @@ void EngineMatch::onGameFinished(ChessGame* game, int number)
 		TournamentPlayer fcp = m_tournament->playerAt(0);
 		TournamentPlayer scp = m_tournament->playerAt(1);
 		int totalResults = fcp.gamesFinished();
-		qInfo("Score of %s vs %s: %d - %d - %d  [%.3f] %d",
-		      qUtf8Printable(fcp.name()),
-		      qUtf8Printable(scp.name()),
-		      fcp.wins(), scp.wins(), fcp.draws(),
-		      double(fcp.score()) / (totalResults * 2),
-		      totalResults);
+
+		switch(m_tournament->rMobType())
+		{
+		case Chess::Classical:
+			qInfo("Score of %s vs %s: %d - %d - %d  [%.3f] %d",
+				  qUtf8Printable(fcp.name()),
+				  qUtf8Printable(scp.name()),
+				  fcp.wins<Chess::Classical>(), scp.wins<Chess::Classical>(), fcp.draws<Chess::Classical>(),
+				  fcp.points<Chess::Classical>()/totalResults,
+				  totalResults);
+			break;
+
+		case Chess::AllOrNone:
+			qInfo("Score of %s vs %s: %d - %d - %d  [%.3f] %d",
+							  qUtf8Printable(fcp.name()),
+							  qUtf8Printable(scp.name()),
+							  fcp.wins<Chess::AllOrNone>(), scp.wins<Chess::AllOrNone>(), fcp.draws<Chess::AllOrNone>(),
+							  fcp.points<Chess::AllOrNone>()/totalResults,
+							  totalResults);
+			break;
+
+		case Chess::Komi:
+			qInfo("Score of %s vs %s: %d - %d - %d  [%.3f] %d",
+							  qUtf8Printable(fcp.name()),
+							  qUtf8Printable(scp.name()),
+							  fcp.wins<Chess::Komi>(), scp.wins<Chess::Komi>(), fcp.draws<Chess::Komi>(),
+							  fcp.points<Chess::Komi>()/totalResults,
+							  totalResults);
+			break;
+
+		case Chess::Harmonic:
+			qInfo("Score of %s vs %s: %.2f [%.3f] %d",
+							  qUtf8Printable(fcp.name()),
+							  qUtf8Printable(scp.name()),
+							  fcp.points<Chess::Harmonic>(),
+							  fcp.points<Chess::Harmonic>()/totalResults,
+							  totalResults);
+			break;
+
+		default:
+			qInfo("Score of %s vs %s: %.2f [%.3f] %d",
+										  qUtf8Printable(fcp.name()),
+										  qUtf8Printable(scp.name()),
+										  fcp.points<Chess::Exponential>(),
+										  fcp.points<Chess::Exponential>()/totalResults,
+										  totalResults);
+		}
 	}
 
 	if (m_ratingInterval != 0
 	&&  (m_tournament->finishedGameCount() % m_ratingInterval) == 0)
 		printRanking();
+
 }
 
 void EngineMatch::onTournamentFinished()
