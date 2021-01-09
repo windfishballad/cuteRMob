@@ -50,6 +50,7 @@ NewTournamentDialog::NewTournamentDialog(EngineManager* engineManager,
 	Q_ASSERT(engineManager != nullptr);
 	ui->setupUi(this);
 
+
 	m_srcEnginesModel = new EngineConfigurationModel(engineManager, this);
 	#ifdef QT_DEBUG
 	new ModelTest(m_srcEnginesModel, this);

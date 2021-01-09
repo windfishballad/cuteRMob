@@ -24,7 +24,6 @@
 #include <QMetaType>
 #include <QTranslator>
 #include <QSysInfo>
-
 #include <board/genericmove.h>
 #include <board/move.h>
 #include <board/side.h>

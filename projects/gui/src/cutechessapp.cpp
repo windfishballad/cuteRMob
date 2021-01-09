@@ -31,7 +31,6 @@
 #include <chessgame.h>
 #include <timecontrol.h>
 #include <humanbuilder.h>
-
 #include "mainwindow.h"
 #include "settingsdlg.h"
 #include "tournamentresultsdlg.h"

@@ -64,6 +64,7 @@ void TournamentResultsDialog::update()
 	QString text;
 
 	// A quick fix, copied from the CLI side.
+	/*
 	if (tournament->playerCount() == 2 && tournament->type() != "knockout")
 	{
 		TournamentPlayer fcp = tournament->playerAt(0);
@@ -80,6 +81,7 @@ void TournamentResultsDialog::update()
 		       .arg(fcp.draws())
 		       .arg(scoreRatio, 0, 'f', 3);
 	}
+	*/
 
 	text += tournament->results();
 	text += tr("\n%1 of %2 games finished.")
