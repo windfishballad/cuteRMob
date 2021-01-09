@@ -10,7 +10,7 @@ This branch, forked by windfishballad, modifies CuteChess in order to play the w
 
 [r-Mobility](https://wiki.chessdom.org/R-Mobility), invented by Aloril, is a natural generalization of the scoring of Chess (an is also generalization of Lasker Chess scoring).
 
-In points scoring, it allows for more granular results than 1-0 or 0.5-0.5, thinning the optimal play tree by an order of magnitude (while remaining fully included in regular chess optimal play tree), and keeping engames which are drawn by classical rules interesting.
+In points scoring, it allows for more granular results than 1-0 or 0.5-0.5, thinning the optimal play tree by an order of magnitude (while remaining fully included in regular chess optimal play tree), and keeping engames which are drawn by classical rules interesting. It often also rewards the attacking side in the middlegame if attack is strong but insufficient to win, since a perpetual is likely to give a low G-score (typically G1.0 or G2.0).
 
 In Komi scoring, it allows for drawless chess. 
 
