@@ -22,8 +22,10 @@
 #include "playerbuilder.h"
 #include "timecontrol.h"
 #include "board/side.h"
+#include "board/result.h"
 
 class OpeningBook;
+
 
 /*! \brief A class for storing a player's tournament-specific details. */
 class LIB_EXPORT TournamentPlayer
@@ -51,71 +53,87 @@ class LIB_EXPORT TournamentPlayer
 		 * Returns the total number of wins the player has in the
 		 * tournament.
 		 */
-		int wins() const;
-		/*!
-		 * Returns the total number of draws the player has in the
-		 * tournament.
-		 */
-		int draws() const;
-		/*!
-		 * Returns the total number of losses the player has in the
-		 * tournament.
-		 */
-		int losses() const;
-		/*!
-		 * Returns the total number of wins of the player when
-		 * playing with White.
-		 */
-		int whiteWins() const;
-		/*!
-		 * Returns the total number of draws of the player when
-		 * playing with White.
-		 */
-		int whiteDraws() const;
-		/*!
-		 * Returns the total number of losses of the player when
-		 * playing with White.
-		 */
-		int whiteLosses() const;
-		/*!
-		 * Returns the total number of wins of the player when
-		 * playing with Black.
-		 */
-		int blackWins() const;
-		/*!
-		 * Returns the total number of draws of the player when
-		 * playing with Black.
-		 */
-		int blackDraws() const;
-		/*!
-		 * Returns the total number of losses of the player when
-		 * playing with Black.
-		 */
-		int blackLosses() const;
-		/*! Returns the player's total score in the tournament. */
-		int score() const;
-		/*!
-		 * Adds \a score to the player's score in the tournament for
-		 * playing side \a side.
-		 */
-		void addScore(Chess::Side side, int score);
+		int objectives(int gScore) const;
+
+		int whiteObjectives(int gScore) const;
+
+		int blackObjectives(int gScore) const;
+
+
+		int nWhiteGames() const;
+
+		template<Chess::rMobScoring> int wins() const;
+		template<Chess::rMobScoring> int losses() const;
+		template<Chess::rMobScoring> int draws() const;
+		template<Chess::rMobScoring> int whiteWins() const;
+		template<Chess::rMobScoring> int whiteLosses() const;
+		template<Chess::rMobScoring> int whiteDraws() const;
+		template<Chess::rMobScoring> int blackWins() const;
+		template<Chess::rMobScoring> int blackLosses() const;
+		template<Chess::rMobScoring> int blackDraws() const;
+
+		template<Chess::rMobScoring> qreal points() const;
+		template<Chess::rMobScoring> qreal whitePoints() const;
+		template<Chess::rMobScoring> qreal blackPoints() const;
+
+		template<Chess::rMobScoring> qreal squarePoints() const;
+		template<Chess::rMobScoring> qreal whiteSquarePoints() const;
+		template<Chess::rMobScoring> qreal blackSquarePoints() const;
+
+		/*! Adds \a score to the player's score in the tournament. */
+
+		void addScore(Chess::Side side, Chess::rMobResult gResult, Chess::rMobKomi komi, int gCutoff, Chess::rScoring* exponentialScorer,Chess::rScoring* harmonicScorer);
 		/*!
 		 * Returns the total number of games the player has finished
 		 * in the tournament.
 		 */
+
+
+
 		int gamesFinished() const;
+
 
 	private:
 		PlayerBuilder* m_builder;
 		TimeControl m_timeControl;
 		const OpeningBook* m_book;
 		int m_bookDepth;
-		int m_wins;
-		int m_draws;
-		int m_losses;
-		int m_whiteWins;
-		int m_whiteDraws;
-		int m_whiteLosses;
+
+		int m_Objectives[876];
+		int m_whiteObjectives[876];
+		int m_games;
+		int m_whiteGames;
+
+		int m_classicalWins;
+		int m_classicalLosses;
+
+		int m_whiteClassicalWins;
+		int m_whiteClassicalLosses;
+
+		int m_rMobWins;
+		int m_rMobLosses;
+
+		int m_whiteRMobWins;
+		int m_whiteRMobLosses;
+
+		int m_komiWins;
+		int m_komiLosses;
+
+		int m_whiteKomiWins;
+		int m_whiteKomiLosses;
+
+		qreal m_exponentialPoints;
+		qreal m_whiteExponentialPoints;
+
+		qreal m_squareExponentialPoints;
+		qreal m_whiteSquareExponentialPoints;
+
+		qreal m_harmonicPoints;
+		qreal m_whiteHarmonicPoints;
+
+		qreal m_squareHarmonicPoints;
+		qreal m_whiteSquareHarmonicPoints;
+
 };
 
 #endif // TOURNAMENTPLAYER_H

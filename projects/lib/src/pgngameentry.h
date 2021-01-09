@@ -49,7 +49,8 @@ class LIB_EXPORT PgnGameEntry
 			RoundTag,	//!< The playing round ordinal of the game
 			WhiteTag,	//!< The player of the white pieces
 			BlackTag,	//!< The player of the black pieces
-			ResultTag,	//!< The result of the game
+			LegacyResultTag, //!< The legacy result tag of games
+			ResultTag, //!< The result of the game
 			VariantTag	//!< The chess variant of the game
 		};
 

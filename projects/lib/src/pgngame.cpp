@@ -30,10 +30,15 @@ namespace {
 
 void writeTag(QTextStream& out, const QString& tag, const QString& value)
 {
-	if (!value.isEmpty())
-		out << "[" << tag << " \"" << value << "\"]\n";
+	if(tag=="Legacy")
+		out << "[Legacy]\n";
 	else
-		out << "[" << tag << " \"?\"]\n";
+	{
+		if (!value.isEmpty())
+			out << "[" << tag << " \"" << value << "\"]\n";
+		else
+			out << "[" << tag << " \"?\"]\n";
+	}
 }
 
 } // anonymous namespace
@@ -51,10 +56,12 @@ QTextStream& operator<<(QTextStream& out, const PgnGame& game)
 }
 
 
-PgnGame::PgnGame()
+PgnGame::PgnGame(bool hasKomi, bool isLegacy)
 	: m_startingSide(Chess::Side::White),
 	  m_eco(EcoNode::root()),
-	  m_tagReceiver(nullptr)
+	  m_tagReceiver(nullptr),
+	  m_hasKomi(hasKomi),
+	  m_isLegacy(isLegacy)
 {
 }
 
@@ -75,13 +82,18 @@ QList< QPair<QString, QString> > PgnGame::tags() const
 {
 	QList< QPair<QString, QString> > list;
 
-	// The seven tag roster
-	const QStringList roster = (QStringList() << "Event" << "Site" << "Date"
-		<< "Round" << "White" << "Black" << "Result");
+	// The tag roster
+	const QStringList roster = m_isLegacy ?
+			(m_hasKomi ? (QStringList() << "Event" << "Site" << "Date"
+			<< "Round" << "White" << "Black" << "RMobilityCutoff"<< "Legacy" << "RMobilityScoring" << "Komi" << "Result" << "RMobilityResult" << "Points") : (QStringList() << "Event" << "Site" << "Date"
+		<< "Round" << "White" << "Black" << "RMobilityCutoff" << "Legacy" << "RMobilityScoring" << "Result" << "RMobilityResult" << "Points"))
+		: (m_hasKomi ? (QStringList() << "Event" << "Site" << "Date"
+				<< "Round" << "White" << "Black" << "RMobilityCutoff"<< "RMobilityScoring" << "Komi" << "Result" << "RMobilityResult" << "Points") : (QStringList() << "Event" << "Site" << "Date"
+			<< "Round" << "White" << "Black" << "RMobilityCutoff" << "RMobilityScoring" << "Result" << "RMobilityResult" << "Points"));
 	for (const QString& tag : roster)
 	{
 		QString value = m_tags.value(tag);
-		if (value.isEmpty())
+		if (value.isEmpty() && tag!="Legacy")
 			value = "?";
 		list.append(qMakePair(tag, value));
 	}
@@ -460,7 +472,9 @@ void PgnGame::setPlayerName(Chess::Side side, const QString& name)
 
 void PgnGame::setResult(const Chess::Result& result)
 {
-	setTag("Result", result.toShortString());
+
+	setTag("RMobilityResult", result.toShortString());
+	setTag("Result", result.toLegacyString());
 
 	switch (result.type())
 	{
@@ -581,4 +595,9 @@ QMap< int, int > PgnGame::extractScores() const
 		scores[count] = score;
 	}
 	return scores;
+}
+
+bool PgnGame::hasKomi() const
+{
+	return m_hasKomi;
 }

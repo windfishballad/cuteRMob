@@ -19,6 +19,7 @@
 #ifndef SPRT_H
 #define SPRT_H
 
+#include <QtMath>
 /*!
  * \brief A Sequential Probability Ratio Test
  *
@@ -86,16 +87,16 @@ class LIB_EXPORT Sprt
 		 * After calling this function, status() should be called to
 		 * check if H0 or H1 can be accepted.
 		 */
-		void addGameResult(GameResult result);
+		void addGameResult(qreal points);
 
 	private:
 		double m_elo0;
 		double m_elo1;
 		double m_alpha;
 		double m_beta;
-		int m_wins;
-		int m_losses;
-		int m_draws;
+		qreal m_wins;
+		qreal m_losses;
+		qreal m_draws;
 };
 
 #endif // SPRT_H

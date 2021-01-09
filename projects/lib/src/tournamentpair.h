@@ -19,6 +19,7 @@
 #ifndef TOURNAMENTPAIR_H
 #define TOURNAMENTPAIR_H
 
+#include <QObject>
 /*!
  * \brief A single encounter in a tournament
  *
@@ -85,27 +86,27 @@ class LIB_EXPORT TournamentPair
 		 * Returns the sum of both player's score in their current
 		 * encounter.
 		 */
-		int scoreSum() const;
+		qreal scoreSum() const;
 		/*! Returns \a firstScore() - \a secondScore(). */
-		int scoreDiff() const;
+		qreal scoreDiff() const;
 		/*!
 		 * Returns the first player's score in the current encounter.
 		 */
-		int firstScore() const;
+		qreal firstScore() const;
 		/*!
 		 * Adds \a score to the first player's score in the current
 		 * encounter.
 		 */
-		void addFirstScore(int score);
+		void addFirstScore(qreal score);
 		/*!
 		 * Returns the second player's score in the current encounter.
 		 */
-		int secondScore() const;
+		qreal secondScore() const;
 		/*!
 		 * Adds \a score to the second player's score in the current
 		 * encounter.
 		 */
-		void addSecondScore(int score);
+		void addSecondScore(qreal score);
 		/*!
 		 * Swaps the players so that the first player becomes the
 		 * second player and vice versa.
@@ -116,7 +117,7 @@ class LIB_EXPORT TournamentPair
 		struct Player
 		{
 			int index;
-			int score;
+			qreal score;
 		};
 
 		Player m_first;

@@ -130,24 +130,33 @@ int KnockoutTournament::gamesPerCycle() const
 	return total;
 }
 
-void KnockoutTournament::addScore(int player, Chess::Side side, int score)
+
+
+void KnockoutTournament::addScore(int player, Chess::Side side, Chess::rMobResult gResult, Chess::rMobKomi komi)
 {
+	qreal previousScore=2*playerPoints(player);
+
+	Tournament::addScore(player, side, gResult, komi);
+
+	qreal newScore=2*playerPoints(player);
+
 	for (TournamentPair* pair : m_rounds.last())
 	{
 		if (pair->firstPlayer() == player)
 		{
-			pair->addFirstScore(score);
+			pair->addFirstScore(newScore-previousScore);
 			break;
 		}
 		if (pair->secondPlayer() == player)
 		{
-			pair->addSecondScore(score);
+			pair->addSecondScore(newScore-previousScore);
 			break;
 		}
 	}
 
-	Tournament::addScore(player, side, score);
+
 }
+
 
 QList<int> KnockoutTournament::lastRoundWinners() const
 {
@@ -178,22 +187,22 @@ bool KnockoutTournament::needMoreGames(const TournamentPair* pair) const
 	// Assign the leading player all points from ongoing games.
 	// If the leader still doesn't have enough points to win the
 	// encounter, return true
-	int leadScore = qMax(pair->firstScore(), pair->secondScore());
-	int pointsInProgress = pair->gamesInProgress() * 2;
+	qreal leadScore = qMax(pair->firstScore(), pair->secondScore());
+	qreal pointsInProgress = pair->gamesInProgress() * 2.0;
 	leadScore += pointsInProgress;
-	if (leadScore <= gamesPerEncounter())
+	if (leadScore < gamesPerEncounter()+0.0000001)
 		return true;
 
 	// Make sure the score diff is big enough
-	int minDiff = 1;
+	qreal minDiff = 1.0;
 	if (gamesPerEncounter() % 2 == 0)
-		minDiff = 3;
+		minDiff = 3.0;
 
-	int maxDiff = qAbs(pair->scoreDiff()) + pointsInProgress;
-	if (maxDiff >= minDiff)
+	qreal maxDiff = qFabs(pair->scoreDiff()) + pointsInProgress;
+	if (maxDiff > minDiff+0.00000001)
 		return false;
 
-	if (minDiff == 1 || maxDiff == 0)
+	if (minDiff < 2 || maxDiff < 0.0000001)
 		return true;
 
 	// If the encounter was extended, make sure there's an even
@@ -272,16 +281,16 @@ QString KnockoutTournament::results() const
 			int lineNum = ((2 << (r - 1)) - 1) + (x * (2 << r));
 			QString text = QString("%1%2")
 				       .arg(QString(r * 2, '\t'), winner);
-			if (pair->scoreSum())
+			if (qFabs(pair->scoreSum())>.000001)
 			{
-				int score1 = pair->firstScore();
-				int score2 = pair->secondScore();
+				qreal score1 = pair->firstScore();
+				qreal score2 = pair->secondScore();
 				if (!pair->hasOriginalOrder())
 					std::swap(score1, score2);
 
 				text += QString(" (%1-%2)")
-					.arg(double(score1) / 2)
-					.arg(double(score2) / 2);
+					.arg(score1 / 2, 4,'f', 2)
+					.arg(score2 / 2, 4,'f', 2);
 			}
 			lines[lineNum] += text;
 			x++;

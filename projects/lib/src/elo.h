@@ -51,6 +51,7 @@ class LIB_EXPORT Elo
 		int m_wins;
 		int m_losses;
 		int m_draws;
+
 		qreal m_mu;
 		qreal m_stdev;
 
@@ -62,5 +63,40 @@ class LIB_EXPORT Elo
 		// probability -> quantile
 		static qreal phiInv(qreal p);
 };
+
+class LIB_EXPORT rMobPointsElo
+{
+	public:
+		/*! Creates a new Elo object. */
+		rMobPointsElo(qreal points, qreal squarePoints, int n);
+
+		/*! Returns the Elo difference. */
+		qreal diff() const;
+		/*! Returns the error margin in Elo points. */
+		qreal errorMargin() const;
+		/*! Returns the ratio of points won. */
+		qreal pointRatio() const;
+
+		/*! Returns the likelihood of superiority. */
+		qreal LOS() const;
+
+	private:
+		qreal m_points;
+		qreal m_squarePoints;
+
+		int m_nGames;
+
+		qreal m_mu;
+		qreal m_stdev;
+
+		// Elo difference
+		static qreal diff(qreal p);
+		// Inverted error function
+		static qreal erfInv(qreal x);
+		// Quantile function for the standard Gaussian law:
+		// probability -> quantile
+		static qreal phiInv(qreal p);
+};
+
 
 #endif // ELO_H

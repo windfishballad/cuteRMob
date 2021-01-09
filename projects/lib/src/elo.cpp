@@ -72,3 +72,62 @@ qreal Elo::LOS() const
 {
 	return 100 * (0.5 + 0.5 * std::erf((m_wins - m_losses) / std::sqrt(2.0 * (m_wins + m_losses))));
 }
+
+rMobPointsElo::rMobPointsElo(qreal points, qreal squarePoints, int n)
+{
+	m_points = points;
+	m_squarePoints = squarePoints;
+	m_nGames = n;
+
+	m_mu=points/n;
+
+	m_stdev = (std::sqrt(m_squarePoints/n)-m_mu) / std::sqrt(n);
+}
+
+qreal rMobPointsElo::pointRatio() const
+{
+	return m_mu;
+}
+
+
+qreal rMobPointsElo::diff() const
+{
+	return diff(m_mu);
+}
+
+qreal rMobPointsElo::diff(qreal p)
+{
+	return -400.0 * std::log10(1.0 / p - 1.0);
+}
+
+qreal rMobPointsElo::errorMargin() const
+{
+	qreal muMin = m_mu + phiInv(0.025) * m_stdev;
+	qreal muMax = m_mu + phiInv(0.975) * m_stdev;
+	return (diff(muMax) - diff(muMin)) / 2.0;
+}
+
+qreal rMobPointsElo::erfInv(qreal x)
+{
+	const qreal pi = 3.1415926535897;
+
+	qreal a = 8.0 * (pi - 3.0) / (3.0 * pi * (4.0 - pi));
+	qreal y = std::log(1.0 - x * x);
+	qreal z = 2.0 / (pi * a) + y / 2.0;
+
+	qreal ret = std::sqrt(std::sqrt(z * z - y / a) - z);
+
+	if (x < 0.0)
+		return -ret;
+	return ret;
+}
+
+qreal rMobPointsElo::phiInv(qreal p)
+{
+	return std::sqrt(2.0) * erfInv(2.0 * p - 1.0);
+}
+
+qreal rMobPointsElo::LOS() const
+{
+	return 100 * (0.5 + 0.5 * std::erf((m_mu-0.5) / (m_stdev*std::sqrt(2.0))));
+}

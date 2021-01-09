@@ -331,6 +331,7 @@ bool PgnGameEntry::read(PgnStream& in)
 	addTag(tags["White"]);
 	addTag(tags["Black"]);
 	addTag(tags["Result"]);
+	addTag(tags["RMobilityResult"]);
 	addTag(tags["Variant"]);
 
 	return true;

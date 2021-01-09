@@ -19,6 +19,9 @@
 #include "sprt.h"
 #include <cmath>
 #include <QtGlobal>
+#include <QFile>
+#include <QMultiMap>
+#include <QSet>
 
 class BayesElo;
 class SprtProbability;
@@ -41,7 +44,7 @@ class BayesElo
 class SprtProbability
 {
 	public:
-		SprtProbability(int wins, int losses, int draws);
+		SprtProbability(qreal wins, qreal losses, qreal draws);
 		SprtProbability(const BayesElo& b);
 
 		bool isValid() const;
@@ -89,14 +92,14 @@ double BayesElo::scale() const
 }
 
 
-SprtProbability::SprtProbability(int wins, int losses, int draws)
+SprtProbability::SprtProbability(qreal wins, qreal losses, qreal draws)
 {
 	Q_ASSERT(wins > 0 && losses > 0 && draws > 0);
 
-	const int count = wins + losses + draws;
+	const qreal count = wins + losses + draws;
 
-	m_pWin = double(wins) / count;
-	m_pLoss = double(losses) / count;
+	m_pWin = wins / count;
+	m_pLoss = losses / count;
 	m_pDraw = 1.0 - m_pWin - m_pLoss;
 }
 
@@ -111,7 +114,7 @@ bool SprtProbability::isValid() const
 {
 	return 0.0 < m_pWin && m_pWin < 1.0 &&
 	       0.0 < m_pLoss && m_pLoss < 1.0 &&
-	       0.0 < m_pDraw && m_pDraw < 1.0;
+	       0.0 <= m_pDraw && m_pDraw <= 1.0;
 }
 
 double SprtProbability::pWin() const
@@ -164,7 +167,7 @@ Sprt::Status Sprt::status() const
 		0.0
 	};
 
-	if (m_wins <= 0 || m_losses <= 0 || m_draws <= 0)
+	if (m_wins < 1 || m_losses < 1 || m_draws < 0)
 		return status;
 
 	// Estimate draw_elo out of sample
@@ -194,12 +197,16 @@ Sprt::Status Sprt::status() const
 	return status;
 }
 
-void Sprt::addGameResult(GameResult result)
+void Sprt::addGameResult(qreal points)
 {
-	if (result == Win)
-		m_wins++;
-	else if (result == Draw)
-		m_draws++;
-	else if (result == Loss)
-		m_losses++;
+	if(points>=0.5)
+	{
+		m_wins+=(points-0.5)/0.5;
+		m_draws+=(1-points)/0.5;
+	}
+	else
+	{
+		m_losses+=(0.5-points)/0.5;
+		m_draws+=points/0.5;
+	}
 }

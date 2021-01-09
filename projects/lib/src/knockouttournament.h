@@ -19,8 +19,8 @@
 #ifndef KNOCKOUTTOURNAMENT_H
 #define KNOCKOUTTOURNAMENT_H
 
+#include <QObject>
 #include "tournament.h"
-
 
 /*!
  * \brief Knockout type chess tournament.
@@ -42,12 +42,14 @@ class LIB_EXPORT KnockoutTournament : public Tournament
 		virtual bool canSetRoundMultiplier() const;
 		virtual QString results() const;
 
+
+
 	protected:
 		// Inherited from Tournament
 		virtual void initializePairing();
 		virtual int gamesPerCycle() const;
 		virtual TournamentPair* nextPair(int gameNumber);
-		virtual void addScore(int player, Chess::Side side, int score);
+		virtual void addScore(int player, Chess::Side side, Chess::rMobResult gResult, Chess::rMobKomi komi);
 		virtual bool areAllGamesFinished() const;
 
 	private:
@@ -58,6 +60,8 @@ class LIB_EXPORT KnockoutTournament : public Tournament
 		bool needMoreGames(const TournamentPair* pair) const;
 
 		QList< QList<TournamentPair*> > m_rounds;
+
 };
 
 #endif // KNOCKOUTTOURNAMENT_H
+

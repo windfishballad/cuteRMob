@@ -15,6 +15,7 @@
     along with Cute Chess.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "board/result.h"
 #include "chessgame.h"
 #include <QThread>
 #include <QTimer>
@@ -66,6 +67,7 @@ ChessGame::ChessGame(Chess::Board* board, PgnGame* pgn, QObject* parent)
 	  m_boardShouldBeFlipped(false),
 	  m_pgn(pgn)
 {
+
 	Q_ASSERT(pgn != nullptr);
 
 	for (int i = 0; i < 2; i++)
@@ -182,7 +184,6 @@ void ChessGame::stop(bool emitMoveChanged)
 	m_pgn->setTag("PlyCount", QString::number(plies));
 
 	m_pgn->setGameEndTime(gameEndTime);
-
 	m_pgn->setResult(m_result);
 	m_pgn->setResultDescription(m_result.description());
 
@@ -266,17 +267,23 @@ void ChessGame::onMoveMade(const Chess::Move& move)
 	addPgnMove(move, evalString(sender->evaluation()));
 
 	// Get the result before sending the move to the opponent
+
 	m_board->makeMove(move);
 	m_result = m_board->result();
+
 	if (m_result.isNone())
 	{
 		if (m_board->reversibleMoveCount() == 0)
 			m_adjudicator.resetDrawMoveCount();
 
 		m_adjudicator.addEval(m_board, sender->evaluation());
-		m_result = m_adjudicator.result();
+		if(m_adjudicator.result().winner()!=Chess::Side::NoSide)
+		{
+			m_result=Chess::Result(Chess::Result::Adjudication,m_adjudicator.result().winner(),m_adjudicator.result().description());
+		}
 	}
 	m_board->undoMove();
+
 
 	ChessPlayer* player = playerToWait();
 	if (player->timeControl()->isHourglass()
@@ -286,8 +293,11 @@ void ChessGame::onMoveMade(const Chess::Move& move)
 	player->makeMove(move);
 	m_board->makeMove(move);
 
+
+
 	if (m_result.isNone())
 	{
+		m_board->result();
 		emitLastMove();
 		startTurn();
 	}
@@ -326,7 +336,7 @@ void ChessGame::onAdjudication(const Chess::Result& result)
 	if (m_finished || result.type() != Chess::Result::Adjudication)
 		return;
 
-	m_result = result;
+	m_result = Chess::Result(Chess::Result::Adjudication,result.winner(), Chess::rMobResult{0,result.winner()},result.description());
 
 	stop();
 }
@@ -442,6 +452,7 @@ void ChessGame::setMoves(const QVector<Chess::Move>& moves)
 bool ChessGame::setMoves(const PgnGame& pgn)
 {
 	setStartingFen(pgn.startingFenString());
+	setKomi(Chess::parseKomi(pgn.tagValue("Komi")));
 	if (!resetBoard())
 		return false;
 	m_scores.clear();
@@ -578,6 +589,7 @@ bool ChessGame::resetBoard()
 		return false;
 	}
 	else if (!m_startingFen.isEmpty())
+
 		m_startingFen = m_board->fenString();
 
 	return true;
@@ -679,7 +691,8 @@ void ChessGame::initializePgn()
 	m_pgn->setDate(QDate::currentDate());
 	m_pgn->setPlayerName(Chess::Side::White, m_player[Chess::Side::White]->name());
 	m_pgn->setPlayerName(Chess::Side::Black, m_player[Chess::Side::Black]->name());
-	m_pgn->setResult(m_result);
+	m_pgn->setTag("RMobilityCutoff", Chess::gValueToString(Chess::rMobResult{m_board->gCutoff(),Chess::Side::White}));
+	if(m_pgn->hasKomi())  m_pgn->setTag("Komi",Chess::komiToString(m_komi));
 
 	if (m_timeControl[Chess::Side::White] == m_timeControl[Chess::Side::Black])
 		m_pgn->setTag("TimeControl", m_timeControl[0].toString());
@@ -739,6 +752,9 @@ void ChessGame::startGame()
 		m_player[side]->newGame(side, m_player[side.opposite()], m_board);
 	}
 
+	//Initialize the r-mobility score
+	m_board->result();
+
 	// Play the forced opening moves first
 	for (int i = 0; i < m_moves.size(); i++)
 	{
@@ -773,3 +789,14 @@ void ChessGame::startGame()
 	
 	startTurn();
 }
+
+void ChessGame::setKomi(Chess::rMobKomi komi)
+{
+	m_komi=komi;
+}
+
+Chess::rMobKomi ChessGame::komi() const
+{
+	return m_komi;
+}
+

@@ -94,32 +94,31 @@ int TournamentPair::gamesInProgress() const
 	return m_gamesStarted - gamesFinished();
 }
 
-int TournamentPair::firstScore() const
+qreal TournamentPair::firstScore() const
 {
 	return m_first.score;
 }
-
-int TournamentPair::secondScore() const
+qreal TournamentPair::secondScore() const
 {
 	return m_second.score;
 }
 
-int TournamentPair::scoreSum() const
+qreal TournamentPair::scoreSum() const
 {
 	return m_first.score + m_second.score;
 }
 
-int TournamentPair::scoreDiff() const
+qreal TournamentPair::scoreDiff() const
 {
 	return m_first.score - m_second.score;
 }
 
-void TournamentPair::addFirstScore(int score)
+void TournamentPair::addFirstScore(qreal score)
 {
 	m_first.score += score;
 }
 
-void TournamentPair::addSecondScore(int score)
+void TournamentPair::addSecondScore(qreal score)
 {
 	m_second.score += score;
 }

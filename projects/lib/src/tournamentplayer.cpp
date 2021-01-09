@@ -17,6 +17,7 @@
 */
 
 #include "tournamentplayer.h"
+#include <cmath>
 
 
 TournamentPlayer::TournamentPlayer(PlayerBuilder* builder,
@@ -27,14 +28,35 @@ TournamentPlayer::TournamentPlayer(PlayerBuilder* builder,
 	  m_timeControl(timeControl),
 	  m_book(book),
 	  m_bookDepth(bookDepth),
-	  m_wins(0),
-	  m_draws(0),
-	  m_losses(0),
-	  m_whiteWins(0),
-	  m_whiteDraws(0),
-	  m_whiteLosses(0)
+	  m_games(0),
+	  m_whiteGames(0),
+	  m_classicalWins(0),
+	  m_classicalLosses(0),
+	  m_whiteClassicalWins(0),
+	  m_whiteClassicalLosses(0),
+	  m_rMobWins(0),
+	  m_rMobLosses(0),
+	  m_whiteRMobWins(0),
+	  m_whiteRMobLosses(0),
+	  m_komiWins(0),
+	  m_komiLosses(0),
+	  m_whiteKomiWins(0),
+	  m_whiteKomiLosses(0),
+	  m_exponentialPoints(0),
+	  m_whiteExponentialPoints(0),
+	  m_squareExponentialPoints(0),
+	  m_whiteSquareExponentialPoints(0),
+	  m_harmonicPoints(0),
+	  m_whiteHarmonicPoints(0),
+	  m_squareHarmonicPoints(0),
+	  m_whiteSquareHarmonicPoints(0)
 {
 	Q_ASSERT(builder != nullptr);
+	for(int i=0;i<876;i++)
+	{
+		m_Objectives[i]=0;
+		m_whiteObjectives[i]=0;
+	}
 }
 
 const PlayerBuilder* TournamentPlayer::builder() const
@@ -68,88 +90,440 @@ int TournamentPlayer::bookDepth() const
 	return m_bookDepth;
 }
 
-int TournamentPlayer::wins() const
+void TournamentPlayer::addScore(Chess::Side side, Chess::rMobResult gResult, Chess::rMobKomi komi, int gCutoff, Chess::rScoring* exponentialScorer, Chess::rScoring* harmonicScorer)
 {
-	return m_wins;
-}
 
-int TournamentPlayer::draws() const
-{
-	return m_draws;
-}
-
-int TournamentPlayer::losses() const
-{
-	return m_losses;
-}
-
-int TournamentPlayer::whiteWins() const
-{
-	return m_whiteWins;
-}
-
-int TournamentPlayer::whiteDraws() const
-{
-	return m_whiteDraws;
-}
-
-int TournamentPlayer::whiteLosses() const
-{
-	return m_whiteLosses;
-}
-
-int TournamentPlayer::blackWins() const
-{
-	return m_wins - m_whiteWins;
-}
-
-int TournamentPlayer::blackDraws() const
-{
-	return m_draws - m_whiteDraws;
-}
-
-int TournamentPlayer::blackLosses() const
-{
-	return m_losses - m_whiteLosses;
-}
-
-int TournamentPlayer::score() const
-{
-	return m_wins * 2 + m_draws;
-}
-
-void TournamentPlayer::addScore(Chess::Side side, int score)
-{
 	if (side == Chess::Side::NoSide)
 		Q_UNREACHABLE();
 
-	switch (score)
+	++m_games;
+	if(side == gResult.gSide)
 	{
-	case 0:
-		m_losses++;
+		++m_Objectives[gResult.gScore];
+		if(gResult.gScore<gCutoff) ++m_rMobWins;
+		if(gResult.gScore==0) ++m_classicalWins;
+		m_exponentialPoints+=exponentialScorer->rValue(gResult.gScore);
+		m_harmonicPoints+=harmonicScorer->rValue(gResult.gScore);
 
-		if (side == Chess::Side::White)
-			m_whiteLosses++;
-		break;
-	case 1:
-		m_draws++;
+		m_squareExponentialPoints+=std::pow(exponentialScorer->rValue(gResult.gScore),2.0);
+		m_squareHarmonicPoints+=std::pow(harmonicScorer->rValue(gResult.gScore),2.0);
 
-		if (side == Chess::Side::White)
-			m_whiteDraws++;
-		break;
-	case 2:
-		m_wins++;
+		if(gResult.gSide==komi.gSide)
+		{
+			if(2*std::min(gResult.gScore,gCutoff)<komi.komi)
+			{
+				++m_komiWins;
+				if(side==Chess::Side::White) ++m_whiteKomiWins;
+			}
+			else if(2*std::min(gResult.gScore,gCutoff)>komi.komi)
+			{
+				++m_komiLosses;
+				if(side==Chess::Side::White) ++m_whiteKomiLosses;
+			}
+		}
+		else
+		{
+			if(komi.komi<2*gCutoff)
+			{
+				++m_komiWins;
+				if(side==Chess::Side::White) ++m_whiteKomiWins;
+			}
+			else if(komi.komi==2*gCutoff)
+			{
+				if(gResult.gScore<gCutoff)
+				{
+					++m_komiWins;
+					if(side==Chess::Side::White) ++m_whiteKomiWins;
+				}
+			}
+			else
+			{
+				if(gResult.gScore<gCutoff)
+				{
+					++m_komiWins;
+					if(side==Chess::Side::White) ++m_whiteKomiWins;
+				}
+				else
+				{
+					++m_komiLosses;
+					if(side==Chess::Side::White) ++m_whiteKomiLosses;
+				}
+			}
+		}
 
-		if (side == Chess::Side::White)
-			m_whiteWins++;
-		break;
+
+		if(side==Chess::Side::White)
+		{
+			++m_whiteGames;
+			++m_whiteObjectives[gResult.gScore];
+			if(gResult.gScore==0) ++m_whiteClassicalWins;
+			m_whiteExponentialPoints+=exponentialScorer->rValue(gResult.gScore);
+			m_whiteSquareExponentialPoints+=std::pow(exponentialScorer->rValue(gResult.gScore),2.0);
+
+			m_whiteHarmonicPoints+=harmonicScorer->rValue(gResult.gScore);
+			m_whiteSquareHarmonicPoints+=std::pow(harmonicScorer->rValue(gResult.gScore),2.0);
+
+			if(gResult.gScore<gCutoff) ++m_whiteRMobWins;
+		}
+	}
+	else
+	{
+		++m_Objectives[875-gResult.gScore];
+		if(gResult.gScore<gCutoff) ++m_rMobLosses;
+		if(gResult.gScore==0) ++m_classicalLosses;
+		m_exponentialPoints+=1.0-exponentialScorer->rValue(gResult.gScore);
+		m_harmonicPoints+=1.0-harmonicScorer->rValue(gResult.gScore);
+
+		m_squareExponentialPoints+=std::pow(1.0-exponentialScorer->rValue(gResult.gScore),2.0);
+		m_squareHarmonicPoints+=std::pow(1.0-harmonicScorer->rValue(gResult.gScore),2.0);
+
+		if(gResult.gSide==komi.gSide)
+		{
+			if(2*std::min(gResult.gScore,gCutoff)<komi.komi)
+			{
+				++m_komiLosses;
+				if(side==Chess::Side::White) ++m_whiteKomiLosses;
+			}
+			else if(2*std::min(gResult.gScore,gCutoff)>komi.komi)
+			{
+				++m_komiWins;
+				if(side==Chess::Side::White) ++m_whiteKomiWins;
+			}
+		}
+		else
+		{
+			if(komi.komi<2*gCutoff)
+			{
+				++m_komiLosses;
+				if(side==Chess::Side::White) ++m_whiteKomiLosses;
+			}
+			else if(komi.komi==2*gCutoff)
+			{
+				if(gResult.gScore<gCutoff)
+				{
+					++m_komiLosses;
+					if(side==Chess::Side::White) ++m_whiteKomiLosses;
+				}
+			}
+			else
+			{
+				if(gResult.gScore<gCutoff)
+				{
+					++m_komiLosses;
+					if(side==Chess::Side::White) ++m_whiteKomiLosses;
+				}
+				else
+				{
+					++m_komiWins;
+					if(side==Chess::Side::White) ++m_whiteKomiWins;
+				}
+			}
+		}
+		if(side==Chess::Side::White)
+		{
+			++m_whiteGames;
+			++m_whiteObjectives[875-gResult.gScore];
+			if(gResult.gScore==0) ++m_whiteClassicalLosses;
+			if(gResult.gScore<gCutoff) ++m_whiteRMobLosses;
+
+			m_whiteExponentialPoints+=1.0-exponentialScorer->rValue(gResult.gScore);
+			m_whiteSquareExponentialPoints+=std::pow(1.0-exponentialScorer->rValue(gResult.gScore),2.0);
+
+			m_whiteHarmonicPoints+=1.0-harmonicScorer->rValue(gResult.gScore);
+			m_whiteSquareHarmonicPoints+=std::pow(1.0-harmonicScorer->rValue(gResult.gScore),2.0);
+
+		}
+	}
+
+}
+
+
+
+template<Chess::rMobScoring rMobType>
+qreal TournamentPlayer::points() const
+{
+	switch(rMobType)
+	{
+	case Chess::Exponential:
+		return m_exponentialPoints;
+
+	case Chess::Harmonic:
+		return m_harmonicPoints;
+
 	default:
-		Q_UNREACHABLE();
-		break;
+		return qreal(wins<rMobType>())+0.5*qreal(draws<rMobType>());
 	}
 }
 
+template qreal TournamentPlayer::points<Chess::Classical>() const;
+template qreal TournamentPlayer::points<Chess::Exponential>() const;
+template qreal TournamentPlayer::points<Chess::Harmonic>() const;
+template qreal TournamentPlayer::points<Chess::AllOrNone>() const;
+template qreal TournamentPlayer::points<Chess::Komi>() const;
+
+template<Chess::rMobScoring rMobType>
+qreal TournamentPlayer::squarePoints() const
+{
+	switch(rMobType)
+	{
+	case Chess::Exponential:
+		return m_squareExponentialPoints;
+
+	case Chess::Harmonic:
+		return m_squareHarmonicPoints;
+
+	default:
+		return qreal(wins<rMobType>())+0.25*draws<rMobType>();
+	}
+}
+
+template qreal TournamentPlayer::squarePoints<Chess::Classical>() const;
+template qreal TournamentPlayer::squarePoints<Chess::Exponential>() const;
+template qreal TournamentPlayer::squarePoints<Chess::Harmonic>() const;
+template qreal TournamentPlayer::squarePoints<Chess::AllOrNone>() const;
+template qreal TournamentPlayer::squarePoints<Chess::Komi>() const;
+
+
+template<Chess::rMobScoring rMobType>
+qreal TournamentPlayer::whitePoints() const
+{
+	switch(rMobType)
+	{
+	case Chess::Exponential:
+		return m_whiteExponentialPoints;
+
+	case Chess::Harmonic:
+		return m_whiteHarmonicPoints;
+
+	default:
+		return qreal(whiteWins<rMobType>())+0.5*whiteDraws<rMobType>();
+	}
+}
+
+template qreal TournamentPlayer::whitePoints<Chess::Classical>() const;
+template qreal TournamentPlayer::whitePoints<Chess::Exponential>() const;
+template qreal TournamentPlayer::whitePoints<Chess::Harmonic>() const;
+template qreal TournamentPlayer::whitePoints<Chess::AllOrNone>() const;
+template qreal TournamentPlayer::whitePoints<Chess::Komi>() const;
+
+template<Chess::rMobScoring rMobType>
+qreal TournamentPlayer::whiteSquarePoints() const
+{
+	switch(rMobType)
+	{
+	case Chess::Exponential:
+		return m_whiteSquareExponentialPoints;
+
+	case Chess::Harmonic:
+		return m_whiteSquareHarmonicPoints;
+
+	default:
+		return qreal(whiteWins<rMobType>())+0.25*whiteDraws<rMobType>();
+	}
+}
+
+template qreal TournamentPlayer::whiteSquarePoints<Chess::Classical>() const;
+template qreal TournamentPlayer::whiteSquarePoints<Chess::Exponential>() const;
+template qreal TournamentPlayer::whiteSquarePoints<Chess::Harmonic>() const;
+template qreal TournamentPlayer::whiteSquarePoints<Chess::AllOrNone>() const;
+template qreal TournamentPlayer::whiteSquarePoints<Chess::Komi>() const;
+
+template<Chess::rMobScoring rMobType>
+qreal TournamentPlayer::blackPoints() const
+{
+	return points<rMobType>()-whitePoints<rMobType>();
+}
+
+template qreal TournamentPlayer::blackPoints<Chess::Classical>() const;
+template qreal TournamentPlayer::blackPoints<Chess::Exponential>() const;
+template qreal TournamentPlayer::blackPoints<Chess::Harmonic>() const;
+template qreal TournamentPlayer::blackPoints<Chess::AllOrNone>() const;
+template qreal TournamentPlayer::blackPoints<Chess::Komi>() const;
+
+template<Chess::rMobScoring rMobType>
+qreal TournamentPlayer::blackSquarePoints() const
+{
+	return squarePoints<rMobType>()-whiteSquarePoints<rMobType>();
+}
+
+template qreal TournamentPlayer::blackSquarePoints<Chess::Classical>() const;
+template qreal TournamentPlayer::blackSquarePoints<Chess::Exponential>() const;
+template qreal TournamentPlayer::blackSquarePoints<Chess::Harmonic>() const;
+template qreal TournamentPlayer::blackSquarePoints<Chess::AllOrNone>() const;
+template qreal TournamentPlayer::blackSquarePoints<Chess::Komi>() const;
+
 int TournamentPlayer::gamesFinished() const
 {
-	return m_wins + m_draws + m_losses;
+	return m_games;
 }
+
+template<Chess::rMobScoring rMobType>
+int TournamentPlayer::wins() const
+{
+	return m_rMobWins;
+}
+
+template<Chess::rMobScoring rMobType>
+int TournamentPlayer::losses() const
+{
+	return m_rMobLosses;
+}
+
+template<Chess::rMobScoring rMobType>
+int TournamentPlayer::whiteWins() const
+{
+	return m_whiteRMobWins;
+}
+
+template<Chess::rMobScoring rMobType>
+int TournamentPlayer::whiteLosses() const
+{
+	return m_whiteRMobLosses;
+}
+
+template int TournamentPlayer::wins<Chess::Exponential>() const;
+template int TournamentPlayer::wins<Chess::Harmonic>() const;
+template int TournamentPlayer::wins<Chess::AllOrNone>() const;
+
+template int TournamentPlayer::losses<Chess::Exponential>() const;
+template int TournamentPlayer::losses<Chess::Harmonic>() const;
+template int TournamentPlayer::losses<Chess::AllOrNone>() const;
+
+template int TournamentPlayer::whiteWins<Chess::Exponential>() const;
+template int TournamentPlayer::whiteWins<Chess::Harmonic>() const;
+template int TournamentPlayer::whiteWins<Chess::AllOrNone>() const;
+
+template int TournamentPlayer::whiteLosses<Chess::Exponential>() const;
+template int TournamentPlayer::whiteLosses<Chess::Harmonic>() const;
+template int TournamentPlayer::whiteLosses<Chess::AllOrNone>() const;
+
+template<>
+int TournamentPlayer::wins<Chess::Classical>() const
+{
+	return m_classicalWins;
+}
+
+template<>
+int TournamentPlayer::losses<Chess::Classical>() const
+{
+	return m_classicalLosses;
+}
+
+template<>
+int TournamentPlayer::whiteWins<Chess::Classical>() const
+{
+	return m_whiteClassicalWins;
+}
+
+template<>
+int TournamentPlayer::whiteLosses<Chess::Classical>() const
+{
+	return m_whiteClassicalLosses;
+}
+
+template<>
+int TournamentPlayer::wins<Chess::Komi>() const
+{
+	return m_komiWins;
+}
+
+template<>
+int TournamentPlayer::losses<Chess::Komi>() const
+{
+	return m_komiLosses;
+}
+
+
+template<>
+int TournamentPlayer::whiteWins<Chess::Komi>() const
+{
+	return m_whiteKomiWins;
+}
+
+template<>
+int TournamentPlayer::whiteLosses<Chess::Komi>() const
+{
+	return m_whiteKomiLosses;
+}
+
+template<Chess::rMobScoring rMobType>
+int TournamentPlayer::draws() const
+{
+	return m_games-wins<rMobType>()-losses<rMobType>();
+}
+
+template int TournamentPlayer::draws<Chess::Classical>() const;
+template int TournamentPlayer::draws<Chess::Exponential>() const;
+template int TournamentPlayer::draws<Chess::Harmonic>() const;
+template int TournamentPlayer::draws<Chess::AllOrNone>() const;
+template int TournamentPlayer::draws<Chess::Komi>() const;
+
+template<Chess::rMobScoring rMobType>
+int TournamentPlayer::blackWins() const
+{
+	return wins<rMobType>()-whiteWins<rMobType>();
+}
+
+template int TournamentPlayer::blackWins<Chess::Classical>() const;
+template int TournamentPlayer::blackWins<Chess::Exponential>() const;
+template int TournamentPlayer::blackWins<Chess::Harmonic>() const;
+template int TournamentPlayer::blackWins<Chess::AllOrNone>() const;
+template int TournamentPlayer::blackWins<Chess::Komi>() const;
+
+template<Chess::rMobScoring rMobType>
+int TournamentPlayer::blackLosses() const
+{
+	return losses<rMobType>()-whiteLosses<rMobType>();
+}
+
+template int TournamentPlayer::blackLosses<Chess::Classical>() const;
+template int TournamentPlayer::blackLosses<Chess::Exponential>() const;
+template int TournamentPlayer::blackLosses<Chess::Harmonic>() const;
+template int TournamentPlayer::blackLosses<Chess::AllOrNone>() const;
+template int TournamentPlayer::blackLosses<Chess::Komi>() const;
+
+
+template<Chess::rMobScoring rMobType>
+int TournamentPlayer::whiteDraws() const
+{
+	return m_whiteGames-whiteWins<rMobType>()-whiteLosses<rMobType>();
+}
+
+template int TournamentPlayer::whiteDraws<Chess::Classical>() const;
+template int TournamentPlayer::whiteDraws<Chess::Exponential>() const;
+template int TournamentPlayer::whiteDraws<Chess::Harmonic>() const;
+template int TournamentPlayer::whiteDraws<Chess::AllOrNone>() const;
+template int TournamentPlayer::whiteDraws<Chess::Komi>() const;
+
+template<Chess::rMobScoring rMobType>
+int TournamentPlayer::blackDraws() const
+{
+	return draws<rMobType>()-whiteDraws<rMobType>();
+}
+
+template int TournamentPlayer::blackDraws<Chess::Classical>() const;
+template int TournamentPlayer::blackDraws<Chess::Exponential>() const;
+template int TournamentPlayer::blackDraws<Chess::Harmonic>() const;
+template int TournamentPlayer::blackDraws<Chess::AllOrNone>() const;
+template int TournamentPlayer::blackDraws<Chess::Komi>() const;
+
+int TournamentPlayer::nWhiteGames() const
+{
+	return m_whiteGames;
+}
+
+int TournamentPlayer::objectives(int i) const
+{
+	return m_Objectives[i];
+}
+
+int TournamentPlayer::whiteObjectives(int i) const
+{
+	return m_whiteObjectives[i];
+}
+
+int TournamentPlayer::blackObjectives(int i) const
+{
+	return m_Objectives[i]-m_whiteObjectives[i];
+}
+

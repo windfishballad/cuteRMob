@@ -54,7 +54,7 @@ class LIB_EXPORT Tournament : public QObject
 			RoundPolicy        //!< Shift on new round
 		};
 
-		constexpr static auto c_defaultFormat
+		constexpr static auto c_defaultFormat 
 			= "Rank,Name,Elo,Error,Games,Score,DScore";
 
 		/*!
@@ -298,6 +298,16 @@ class LIB_EXPORT Tournament : public QObject
 		 */
 		virtual QString results() const;
 
+		void setDefaultKomi(Chess::rMobKomi komi);
+
+		void setCutoff(int cutoff);
+
+		void setLegacy(bool isLegacy);
+
+		void setRMobType(Chess::rMobScoring rMobType);
+
+		Chess::rMobScoring rMobType() const;
+
 	public slots:
 		/*! Starts the tournament. */
 		void start();
@@ -348,6 +358,9 @@ class LIB_EXPORT Tournament : public QObject
 		 * is sent.
 		 */
 		void finished();
+
+
+
 
 	protected:
 		/*! Sets the currently executing tournament round to \a round. */
@@ -423,14 +436,14 @@ class LIB_EXPORT Tournament : public QObject
 		 */
 		virtual void onFinished();
 		/*!
-		 * Adds \a score points to player at index \a player for
-		 * playing side \a side.
+		 * Adds \a score points to player at index \a player.
 		 *
 		 * This member function is called when a game ends with a
 		 * 1-0, 0-1 or 1/2-1/2 result. Subclasses can reimplement this
 		 * to do their own score tracking.
 		 */
-		virtual void addScore(int player, Chess::Side side, int score);
+
+		virtual void addScore(int player, Chess::Side side, Chess::rMobResult gResult, Chess::rMobKomi komi);
 		/*!
 		 * Returns true if all games in the tournament have finished;
 		 * otherwise returns false.
@@ -444,6 +457,14 @@ class LIB_EXPORT Tournament : public QObject
 		 * The default implementation always returns false.
 		 */
 		virtual bool hasGauntletRatingsOrder() const;
+
+		qreal playerPoints(int player) const;
+
+
+
+
+
+
 
 	private slots:
 		void startNextGame();
@@ -485,7 +506,9 @@ class LIB_EXPORT Tournament : public QObject
 			BlackDrawScore,
 			BlackEloDiff,
 			BlackErrorMargin,
-			BlackLOS
+			BlackLOS,
+			WhitePoints,
+			BlackPoints
 		};
 
 		const QMap<QString, int> m_tokenMap = {
@@ -535,44 +558,76 @@ class LIB_EXPORT Tournament : public QObject
 			{"ordo",	"Rank,Name,Elo,Points,Games,Score"}
 		};
 
+		const QString m_rMobFormat="Rank,Name,Games,Points,Score,wPoints,wScore,bPoints,bScore,Elo,Error";
+
 		struct GameData
 		{
 			int number;
 			int whiteIndex;
 			int blackIndex;
 		};
+
+
 		struct RankingData
+		{
+				QString name;
+				int games;
+				int wins;
+				int losses;
+				int draws;
+				int whiteWins;
+				int whiteLosses;
+				int whiteDraws;
+				int blackWins;
+				int blackLosses;
+				int blackDraws;
+				qreal points;
+				qreal score;
+				qreal drawScore;
+				qreal eloDiff;
+				qreal errorMargin;
+				qreal LOS;
+				qreal whiteScore;
+				qreal whiteDrawScore;
+				qreal whiteEloDiff;
+				qreal whiteErrorMargin;
+				qreal whiteLOS;
+				qreal blackScore;
+				qreal blackDrawScore;
+				qreal blackEloDiff;
+				qreal blackErrorMargin;
+				qreal blackLOS;
+		};
+
+
+
+		struct RankingDataPoints
 		{
 			QString name;
 			int games;
-			int wins;
-			int losses;
-			int draws;
-			int whiteWins;
-			int whiteLosses;
-			int whiteDraws;
-			int blackWins;
-			int blackLosses;
-			int blackDraws;
 			qreal points;
+			qreal whitePoints;
+			qreal blackPoints;
 			qreal score;
-			qreal drawScore;
 			qreal eloDiff;
 			qreal errorMargin;
 			qreal LOS;
 			qreal whiteScore;
-			qreal whiteDrawScore;
 			qreal whiteEloDiff;
 			qreal whiteErrorMargin;
 			qreal whiteLOS;
 			qreal blackScore;
-			qreal blackDrawScore;
 			qreal blackEloDiff;
 			qreal blackErrorMargin;
 			qreal blackLOS;
 		};
 
-		QString resultsForSides(int index) const;
+
+		template<Chess::rMobScoring>
+		QString resultsForSides() const;
+
+		template<Chess::rMobScoring>
+		QString subResults() const;
 
 		GameManager* m_gameManager;
 		ChessGame* m_lastGame;
@@ -610,6 +665,13 @@ class LIB_EXPORT Tournament : public QObject
 		int m_repetitionCounter;
 		int m_swapSides;
 		bool m_reverseSides;
+		Chess::rMobKomi m_defaultKomi;
+		bool m_isLegacy;
+		Chess::rMobKomi m_komi;
+
+		int m_maxGScore;
+		int m_Objectives[876];
+
 
 		QString m_resultFormat;
 		PgnGame::PgnMode m_pgnOutMode;
@@ -619,6 +681,18 @@ class LIB_EXPORT Tournament : public QObject
 		QMap<int, PgnGame> m_pgnGames;
 		QMap<ChessGame*, GameData*> m_gameData;
 		QVector<Chess::Move> m_openingMoves;
+
+		int m_gCutoff;
+		Chess::rMobScoring m_rMobType;
+
+		Chess::rScoring* m_exponentialScoring;
+		Chess::rScoring* m_harmonicScoring;
+
+		QString rMobPoints(const Chess::rMobResult& gResult, const Chess::rMobKomi& komi) const;
+
+
+
+
 };
 
 /*!

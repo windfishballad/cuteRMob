@@ -30,6 +30,10 @@
 #include "openingbook.h"
 #include "sprt.h"
 #include "elo.h"
+#include <cmath>
+#include <string>
+
+
 
 
 Tournament::Tournament(GameManager* gameManager, QObject *parent)
@@ -61,11 +65,19 @@ Tournament::Tournament(GameManager* gameManager, QObject *parent)
 	  m_repetitionCounter(0),
 	  m_swapSides(true),
 	  m_reverseSides(false),
+	  m_defaultKomi(defaultKomi),
+	  m_isLegacy(false),
+	  m_maxGScore(-1),
 	  m_resultFormat(c_defaultFormat),
 	  m_pgnOutMode(PgnGame::Verbose),
-	  m_pair(nullptr)
+	  m_pair(nullptr),
+	  m_gCutoff(defaultCutoff),
+	  m_rMobType(Chess::Exponential)
 {
 	Q_ASSERT(gameManager != nullptr);
+	m_exponentialScoring=new Chess::rScoring(Chess::Exponential);
+	m_harmonicScoring=new Chess::rScoring(Chess::Harmonic);
+	for(int i=0;i<876;i++) m_Objectives[i]=0;
 }
 
 Tournament::~Tournament()
@@ -88,6 +100,8 @@ Tournament::~Tournament()
 
 	delete m_openingSuite;
 	delete m_sprt;
+	delete m_exponentialScoring;
+	delete m_harmonicScoring;
 
 	if (m_pgnFile.isOpen())
 		m_pgnFile.close();
@@ -380,8 +394,12 @@ void Tournament::startGame(TournamentPair* pair)
 	const TournamentPlayer& black = m_players[m_pair->secondPlayer()];
 
 	Chess::Board* board = Chess::BoardFactory::create(m_variant);
+	board->setCutoff(m_gCutoff);
+	board->setLegacy(m_isLegacy);
+
 	Q_ASSERT(board != nullptr);
-	ChessGame* game = new ChessGame(board, new PgnGame());
+	ChessGame* game = new ChessGame(board, new PgnGame((m_rMobType==Chess::Komi),m_isLegacy));
+	game->setKomi(m_defaultKomi);
 
 	connect(game, SIGNAL(started(ChessGame*)),
 		this, SLOT(onGameStarted(ChessGame*)));
@@ -398,8 +416,10 @@ void Tournament::startGame(TournamentPair* pair)
 	{
 		game->setStartingFen(m_startFen);
 		game->setMoves(m_openingMoves);
+		game->setKomi(m_komi);
 		m_startFen.clear();
 		m_openingMoves.clear();
+		m_komi=m_defaultKomi;
 		m_repetitionCounter++;
 	}
 	else
@@ -417,6 +437,7 @@ void Tournament::startGame(TournamentPair* pair)
 	if (m_repetitionCounter < m_openingRepetitions)
 	{
 		m_startFen = game->startingFen();
+		m_komi=game->komi();
 		if (m_startFen.isEmpty() && board->isRandomVariant())
 		{
 			m_startFen = board->defaultFenString();
@@ -428,6 +449,7 @@ void Tournament::startGame(TournamentPair* pair)
 	game->pgn()->setEvent(m_name);
 	game->pgn()->setSite(m_site);
 	game->pgn()->setRound(m_round);
+	game->pgn()->setTag("RMobilityScoring",Chess::rMobScoringName(m_rMobType));
 
 	if (m_finishedGameCount > 0)
 		game->setStartDelay(m_startDelay);
@@ -599,9 +621,10 @@ bool Tournament::writeEpd(ChessGame *game)
 	return ok;
 }
 
-void Tournament::addScore(int player, Chess::Side side, int score)
+
+void Tournament::addScore(int player, Chess::Side side,Chess::rMobResult gResult, Chess::rMobKomi komi)
 {
-	m_players[player].addScore(side, score);
+	m_players[player].addScore(side, gResult,komi,m_gCutoff,m_exponentialScoring,m_harmonicScoring);
 }
 
 void Tournament::onGameStarted(ChessGame* game)
@@ -629,7 +652,6 @@ void Tournament::onGameFinished(ChessGame* game)
 	Q_ASSERT(m_gameData.contains(game));
 	GameData* data = m_gameData.take(game);
 	int gameNumber = data->number;
-	Sprt::GameResult sprtResult = Sprt::NoResult;
 
 	int iWhite = data->whiteIndex;
 	int iBlack = data->blackIndex;
@@ -640,27 +662,27 @@ void Tournament::onGameFinished(ChessGame* game)
 	if (!blackName.isEmpty())
 		m_players[iBlack].setName(blackName);
 
-	switch (game->result().winner())
+	if(game->result().type() != Chess::Result::NoResult && game->result().type() != Chess::Result::NoResult)
 	{
-	case Chess::Side::White:
-		addScore(iWhite, Chess::Side::White, 2);
-		addScore(iBlack, Chess::Side::Black, 0);
-		sprtResult = (iWhite == 0) ? Sprt::Win : Sprt::Loss;
-		break;
-	case Chess::Side::Black:
-		addScore(iBlack, Chess::Side::Black, 2);
-		addScore(iWhite, Chess::Side::White, 0);
-		sprtResult = (iBlack == 0) ? Sprt::Win : Sprt::Loss;
-		break;
-	default:
-		if (game->result().isDraw())
-		{
-			addScore(iWhite,  Chess::Side::White, 1);
-			addScore(iBlack,  Chess::Side::Black, 1);
-			sprtResult = Sprt::Draw;
-		}
-		break;
+		qreal oldPoints=playerPoints(0);
+		addScore(iWhite,Chess::Side::White,game->result().gResult(),game->komi());
+		addScore(iBlack,Chess::Side::Black,game->result().gResult(),game->komi());
+		qreal newPoints=playerPoints(0);
+		if(!m_sprt->isNull()) m_sprt->addGameResult(newPoints-oldPoints);
 	}
+
+	m_maxGScore=std::max(game->result().gResult().gScore,m_maxGScore);
+
+	if(game->result().gResult().gSide == Chess::Side::White)
+	{
+		++m_Objectives[game->result().gResult().gScore];
+	}
+	else
+	{
+		++m_Objectives[875-game->result().gResult().gScore];
+	}
+
+	game->pgn()->setTag("Points",rMobPoints(game->result().gResult(),game->komi()));
 
 	writeEpd(game);
 	writePgn(pgn, gameNumber);
@@ -671,9 +693,8 @@ void Tournament::onGameFinished(ChessGame* game)
 	if (!m_recover && crashed)
 		stop();
 
-	if (!m_sprt->isNull() && sprtResult != Sprt::NoResult)
+	if (!m_sprt->isNull())
 	{
-		m_sprt->addGameResult(sprtResult);
 		if (m_sprt->status().result != Sprt::Continue)
 			QMetaObject::invokeMethod(this, "stop", Qt::QueuedConnection);
 	}
@@ -724,6 +745,7 @@ void Tournament::onFinished()
 
 void Tournament::start()
 {
+	qWarning("Tournament starting");
 	Q_ASSERT(m_players.size() > 1);
 
 	m_round = 1;
@@ -770,209 +792,651 @@ void Tournament::stop()
 		QMetaObject::invokeMethod(game, "stop", Qt::QueuedConnection);
 }
 
-QString Tournament::resultsForSides(int index) const
+template<Chess::rMobScoring rMobType>
+QString Tournament::resultsForSides() const
 {
+
 	QString ret;
-	TournamentPlayer player = playerAt(index);
-	int gamesWithWhite  = player.whiteWins() + player.whiteDraws()
-			    + player.whiteLosses();
-	int whiteScore  = 2 * player.whiteWins() + player.whiteDraws();
-	int games = player.gamesFinished();
 
-	if (gamesWithWhite > 0)
+	if(rMobType==Chess::Classical|| rMobType == Chess::AllOrNone || rMobType == Chess::Komi)
 	{
-		ret += tr("...      %1 playing White: %2 - %3 - %4  [%5] %6\n")
-		.arg(qUtf8Printable(player.name()))
-		.arg(player.whiteWins())
-		.arg(player.whiteLosses())
-		.arg(player.whiteDraws())
-		.arg(double(whiteScore) / (gamesWithWhite * 2), 0, 'f', 3)
-		.arg(gamesWithWhite);
+		TournamentPlayer player = playerAt(0);
+		TournamentPlayer player2 = playerAt(1);
+		int gamesWithWhite  = player.nWhiteGames();
+		int whiteScore  = 2 * player.whiteWins<rMobType>()+player.whiteDraws<rMobType>();
+		int games = player.gamesFinished();
+		int score = 2 * player.wins<rMobType>()+player.draws<rMobType>();
+
+		if(games>0)
+		{
+			ret +=tr("Score of %1 vs %2: %3 - %4 - %5  [%6 %] %7\n)")
+			.arg(qUtf8Printable(player.name()))
+			.arg(qUtf8Printable(player2.name()))
+			.arg(player.wins<rMobType>())
+			.arg(player.losses<rMobType>())
+			.arg(player.draws<rMobType>())
+			.arg(double(score) / (games* 2)*100, 0, 'f', 2)
+			.arg(games);
+		}
+
+		if (gamesWithWhite > 0)
+		{
+			ret += tr("...      %1 playing White: %2 - %3 - %4  [%5 %] %6\n")
+			.arg(qUtf8Printable(player.name()))
+			.arg(player.whiteWins<rMobType>())
+			.arg(player.whiteLosses<rMobType>())
+			.arg(player.whiteDraws<rMobType>())
+			.arg(double(whiteScore) / (gamesWithWhite * 2)*100, 0, 'f', 2)
+			.arg(gamesWithWhite);
+		}
+
+		int gamesWithBlack  = games-gamesWithWhite;
+		int blackScore  = 2 * player.blackWins<rMobType>() + player.blackDraws<rMobType>();
+
+		if (gamesWithBlack > 0)
+		{
+			ret += tr("...      %1 playing Black: %2 - %3 - %4  [%5 %] %6\n")
+			.arg(qUtf8Printable(player.name()))
+			.arg(player.blackWins<rMobType>())
+			.arg(player.blackLosses<rMobType>())
+			.arg(player.blackDraws<rMobType>())
+			.arg(double(blackScore) / (gamesWithBlack * 2)*100, 0, 'f', 2)
+			.arg(gamesWithBlack);
+		}
+
+		if (games > 0)
+		{
+			ret += tr("...      White vs Black: %1 - %2 - %3  [%4 %] %5\n")
+			.arg(player.whiteWins<rMobType>() + player.blackLosses<rMobType>())
+			.arg(player.whiteLosses<rMobType>() + player.blackWins<rMobType>())
+			.arg(player.draws<rMobType>())
+			.arg(double(whiteScore + 2 * gamesWithBlack - blackScore)
+					/ (games * 2)*100, 0, 'f', 2)
+			.arg(games);
+		}
+	}
+	else
+	{
+		TournamentPlayer player = playerAt(0);
+		TournamentPlayer player2 = playerAt(1);
+		int gamesWithWhite  = player.nWhiteGames();
+		qreal whiteScore  = 2 * player.whitePoints<rMobType>();
+		int games = player.gamesFinished();
+		qreal score= 2 * player.points<rMobType>();
+
+		if(games>0)
+		{
+			ret +=tr("Score of %1 vs %2: %3 [%4 %] %5\n)")
+			.arg(qUtf8Printable(player.name()))
+			.arg(qUtf8Printable(player2.name()))
+			.arg(player.points<rMobType>())
+			.arg(double(score) / (games* 2)*100, 0, 'f', 2)
+			.arg(games);
+		}
+
+		if (gamesWithWhite > 0)
+		{
+			ret += tr("...      %1 playing White: %2 [%3 %] %4\n")
+			.arg(qUtf8Printable(player.name()))
+			.arg(player.whitePoints<rMobType>())
+			.arg(whiteScore / (gamesWithWhite * 2)*100, 0, 'f', 2)
+			.arg(gamesWithWhite);
+		}
+
+		int gamesWithBlack  = player.gamesFinished()-gamesWithWhite;
+		qreal blackScore  = 2 * player.blackPoints<rMobType>();
+
+		if (gamesWithBlack > 0)
+		{
+			ret += tr("...      %1 playing Black: %2 [%3%] %4\n")
+			.arg(qUtf8Printable(player.name()))
+			.arg(player.blackPoints<rMobType>())
+			.arg(blackScore / (gamesWithBlack * 2)*100, 0, 'f', 2)
+			.arg(gamesWithBlack);
+		}
+
+		if (games > 0)
+		{
+			ret += tr("...      White vs Black: %1 - [%2 %] %3\n")
+			.arg(player.whitePoints<rMobType>()+gamesWithBlack-player.blackPoints<rMobType>())
+			.arg(double(whiteScore + 2 * gamesWithBlack - blackScore)
+					/ (games * 2)*100, 0, 'f', 3)
+			.arg(games);
+		}
 	}
 
-	int gamesWithBlack  = player.blackWins() + player.blackDraws()
-			    + player.blackLosses();
-	int blackScore  = 2 * player.blackWins() + player.blackDraws();
-
-	if (gamesWithBlack > 0)
-	{
-		ret += tr("...      %1 playing Black: %2 - %3 - %4  [%5] %6\n")
-		.arg(qUtf8Printable(player.name()))
-		.arg(player.blackWins())
-		.arg(player.blackLosses())
-		.arg(player.blackDraws())
-		.arg(double(blackScore) / (gamesWithBlack * 2), 0, 'f', 3)
-		.arg(gamesWithBlack);
-	}
-
-	if (games > 0)
-	{
-		ret += tr("...      White vs Black: %1 - %2 - %3  [%4] %5\n")
-		.arg(player.whiteWins() + player.blackLosses())
-		.arg(player.whiteLosses() + player.blackWins())
-		.arg(player.draws())
-		.arg(double(whiteScore + 2 * gamesWithBlack - blackScore)
-			    / (games * 2), 0, 'f', 3)
-		.arg(games);
-	}
 	return ret;
 }
 
+template QString Tournament::resultsForSides<Chess::Classical>() const;
+template QString Tournament::resultsForSides<Chess::Exponential>() const;
+template QString Tournament::resultsForSides<Chess::Harmonic>() const;
+template QString Tournament::resultsForSides<Chess::AllOrNone>() const;
+template QString Tournament::resultsForSides<Chess::Komi>() const;
+
+
+template<Chess::rMobScoring rMobType>
+QString Tournament::subResults() const
+{
+	QString ret;
+
+	if(rMobType==Chess::Classical || rMobType ==Chess::AllOrNone || rMobType==Chess::Komi)
+	{
+		QMultiMap<qreal, RankingData> ranking;
+
+
+
+		for (int i = 0; i < playerCount(); i++)
+		{
+
+			const TournamentPlayer& player(playerAt(i));
+			rMobPointsElo elo(player.points<rMobType>(), player.squarePoints<rMobType>(), player.gamesFinished());
+			rMobPointsElo whiteElo(player.whitePoints<rMobType>(), player.whiteSquarePoints<rMobType>(), player.gamesFinished());
+			rMobPointsElo blackElo(player.blackPoints<rMobType>(), player.blackSquarePoints<rMobType>(), player.gamesFinished()-player.nWhiteGames());
+
+			if (playerCount() == 2)
+					{
+						ret += resultsForSides<rMobType>();
+						if (rMobType == Chess::Classical || rMobType == Chess::AllOrNone || rMobType == Chess::Komi)
+						{
+							ret += QString("Elo difference: %1 +/- %2, LOS: %3 %, DrawRatio: %4 %")
+								.arg(elo.diff(), 0, 'f', 1)
+								.arg(elo.errorMargin(), 0, 'f', 1)
+								.arg(elo.LOS(), 0, 'f', 1)
+								.arg(qreal(player.draws<rMobType>())/player.gamesFinished()* 100, 0, 'f', 1);
+							break;
+						}
+						else
+						{
+							ret += QString("Elo difference: %1 +/- %2, LOS: %3 %")
+								.arg(elo.diff(), 0, 'f', 1)
+								.arg(elo.errorMargin(), 0, 'f', 1)
+								.arg(elo.LOS(), 0, 'f', 1);
+							break;
+						}
+
+					}
+
+
+			RankingData data =
+													{ player.name(),
+													 player.gamesFinished(),
+													 player.wins<rMobType>(),
+													 player.losses<rMobType>(),
+													 player.draws<rMobType>(),
+													 player.whiteWins<rMobType>(),
+													 player.whiteLosses<rMobType>(),
+													 player.whiteDraws<rMobType>(),
+													 player.blackWins<rMobType>(),
+													 player.blackLosses<rMobType>(),
+													 player.blackDraws<rMobType>(),
+													 player.points<rMobType>(),
+													 elo.pointRatio(),
+													 qreal(player.draws<rMobType>())/player.gamesFinished(),
+													 elo.diff(),
+													 elo.errorMargin(),
+													 elo.LOS(),
+													 whiteElo.pointRatio(),
+													 qreal(player.whiteDraws<rMobType>())/player.nWhiteGames(),
+													 whiteElo.diff(),
+													 whiteElo.errorMargin(),
+													 whiteElo.LOS(),
+													 blackElo.pointRatio(),
+													 qreal(player.blackDraws<rMobType>())/(player.gamesFinished()-player.nWhiteGames()),
+													 blackElo.diff(),
+													 blackElo.errorMargin(),
+													 blackElo.LOS() };
+
+
+
+
+
+				// Order players like this:
+				// 1. Gauntlet player (if any)
+				// 2. Players with finished games, sorted by point ratio
+				// 3. Players without finished games
+				qreal key = -1.0;
+				if ((i > 0 && i >= seedCount()) || !hasGauntletRatingsOrder())
+				{
+					if (data.games)
+						key = 1.0 - data.score;
+					else
+						key = 2.0;
+				}
+				ranking.insert(key, data);
+
+
+		}
+
+
+
+
+		//First assign raw format string, then try to find named format
+		QString format = m_resultFormat;
+		if (m_namedFormats.contains(m_resultFormat))
+			format = m_namedFormats[m_resultFormat];
+
+		ResultFormatter formatter(m_tokenMap, format);
+		QMap<int,QString> headerMap;
+
+		if (!ranking.isEmpty())
+		{
+			headerMap.insert(Rank,        QString("%1 ").arg("Rank", 4));
+			headerMap.insert(Name,        QString("%1 ").arg("Name", -25));
+			headerMap.insert(EloDiff,     QString("%1 ").arg("Elo", 7));
+			headerMap.insert(ErrorMargin, QString("%1 ").arg("+/-", 7));
+			headerMap.insert(Games,	      QString("%1 ").arg("Games", 7));
+			headerMap.insert(Wins,	      QString("%1 ").arg("Wins", 7));
+			headerMap.insert(Losses,      QString("%1 ").arg("Losses", 7));
+			headerMap.insert(Draws,       QString("%1 ").arg("Draws", 7));
+			headerMap.insert(Points,      QString("%1 ").arg("Points", 8));
+			headerMap.insert(Score,	      QString("%1 ").arg("Score", 7));
+			headerMap.insert(DrawScore,   QString("%1 ").arg("Draw", 7));
+			headerMap.insert(WhiteScore,  QString("%1 ").arg("White", 7));
+			headerMap.insert(BlackScore,  QString("%1 ").arg("Black", 7));
+			headerMap.insert(WhiteDrawScore,  QString("%1 ").arg("WDraw", 7));
+			headerMap.insert(BlackDrawScore,  QString("%1 ").arg("BDraw", 7));
+			headerMap.insert(WhiteWins,   QString("%1 ").arg("WWins", 7));
+			headerMap.insert(WhiteLosses, QString("%1 ").arg("WLoss.", 7));
+			headerMap.insert(WhiteDraws,  QString("%1 ").arg("WDraws", 7));
+			headerMap.insert(BlackWins,   QString("%1 ").arg("BWins", 7));
+			headerMap.insert(BlackLosses, QString("%1 ").arg("BLoss.", 7));
+			headerMap.insert(BlackDraws,  QString("%1 ").arg("BDraws", 7));
+
+			ret += formatter.entry(headerMap);
+		}
+
+		int rank = hasGauntletRatingsOrder() ? -1 : 0;
+		for (auto it = ranking.constBegin(); it != ranking.constEnd(); ++it)
+		{
+			const RankingData data = it.value();
+			QMap<int, QString> dataMap;
+			dataMap.insert(Rank,       QString("%1 ").arg(++rank, 4));
+			dataMap.insert(Name,       QString("%1 ").arg(data.name, -25));
+			dataMap.insert(EloDiff,    QString("%1 ").arg(data.eloDiff, 7, 'f', 0));
+			dataMap.insert(ErrorMargin,QString("%1 ").arg(data.errorMargin, 7, 'f', 0));
+			dataMap.insert(Games,      QString("%1 ").arg(data.games, 7));
+			dataMap.insert(Wins,       QString("%1 ").arg(data.wins, 7));
+			dataMap.insert(Losses,     QString("%1 ").arg(data.losses, 7));
+			dataMap.insert(Draws,      QString("%1 ").arg(data.draws, 7));
+			dataMap.insert(Points,     QString("%1 ").arg(data.points, 8,'f',1));
+			dataMap.insert(Score,      QString("%1% ").arg(data.score * 100.0, 6, 'f', 1));
+			dataMap.insert(DrawScore,  QString("%1% ").arg(data.drawScore * 100.0, 6, 'f', 1));
+			dataMap.insert(WhiteScore, QString("%1% ").arg(data.whiteScore * 100.0, 6, 'f', 1));
+			dataMap.insert(BlackScore, QString("%1% ").arg(data.blackScore * 100.0, 6, 'f', 1));
+			dataMap.insert(WhiteDrawScore,
+					   QString("%1% ").arg(data.whiteDrawScore * 100.0, 6, 'f', 1));
+			dataMap.insert(BlackDrawScore,
+					   QString("%1% ").arg(data.blackDrawScore * 100.0, 6, 'f', 1));
+			dataMap.insert(WhiteWins,  QString("%1 ").arg(data.whiteWins, 7));
+			dataMap.insert(WhiteLosses,QString("%1 ").arg(data.whiteLosses, 7));
+			dataMap.insert(WhiteDraws, QString("%1 ").arg(data.whiteDraws, 7));
+			dataMap.insert(BlackWins,  QString("%1 ").arg(data.blackWins, 7));
+			dataMap.insert(BlackLosses,QString("%1 ").arg(data.blackLosses, 7));
+			dataMap.insert(BlackDraws, QString("%1 ").arg(data.blackDraws, 7));
+			ret += formatter.entry(dataMap);
+		}
+
+	}
+	else
+	{
+		QMultiMap<qreal, RankingDataPoints> ranking;
+
+		for (int i = 0; i < playerCount(); i++)
+		{
+
+			const TournamentPlayer& player(playerAt(i));
+			rMobPointsElo elo(player.points<rMobType>(), player.squarePoints<rMobType>(), player.gamesFinished());
+			rMobPointsElo whiteElo(player.whitePoints<rMobType>(), player.whiteSquarePoints<rMobType>(), player.gamesFinished());
+			rMobPointsElo blackElo(player.blackPoints<rMobType>(), player.blackSquarePoints<rMobType>(), player.gamesFinished()-player.nWhiteGames());
+
+			if (playerCount() == 2)
+					{
+						ret += resultsForSides<rMobType>();
+						if (rMobType == Chess::Classical || rMobType == Chess::AllOrNone || rMobType == Chess::Komi)
+						{
+							ret += QString("Elo difference: %1 +/- %2, LOS: %3 %, DrawRatio: %4 %")
+								.arg(elo.diff(), 0, 'f', 1)
+								.arg(elo.errorMargin(), 0, 'f', 1)
+								.arg(elo.LOS(), 0, 'f', 1)
+								.arg(qreal(player.draws<rMobType>())/player.gamesFinished()* 100, 0, 'f', 1);
+							break;
+						}
+						else
+						{
+							ret += QString("Elo difference: %1 +/- %2, LOS: %3 %")
+								.arg(elo.diff(), 0, 'f', 1)
+								.arg(elo.errorMargin(), 0, 'f', 1)
+								.arg(elo.LOS(), 0, 'f', 1);
+							break;
+						}
+
+					}
+
+
+			RankingDataPoints data =
+													{player.name(),
+													 player.gamesFinished(),
+													 player.points<rMobType>(),
+													 player.whitePoints<rMobType>(),
+													 player.blackPoints<rMobType>(),
+													 elo.pointRatio(),
+													 elo.diff(),
+													 elo.errorMargin(),
+													 elo.LOS(),
+													 whiteElo.pointRatio(),
+													 whiteElo.diff(),
+													 whiteElo.errorMargin(),
+													 whiteElo.LOS(),
+													 blackElo.pointRatio(),
+													 blackElo.diff(),
+													 blackElo.errorMargin(),
+													 blackElo.LOS() };
+
+
+
+
+
+				// Order players like this:
+				// 1. Gauntlet player (if any)
+				// 2. Players with finished games, sorted by point ratio
+				// 3. Players without finished games
+				qreal key = -1.0;
+				if ((i > 0 && i >= seedCount()) || !hasGauntletRatingsOrder())
+				{
+					if (data.games)
+						key = 1.0 - data.score;
+					else
+						key = 2.0;
+				}
+				ranking.insert(key, data);
+			}
+
+
+
+
+
+		//First assign raw format string, then try to find named format
+		QString format = m_rMobFormat;
+
+		ResultFormatter formatter(m_tokenMap, format);
+		QMap<int,QString> headerMap;
+
+		if (!ranking.isEmpty())
+		{
+			headerMap.insert(Rank,        QString("%1 ").arg("Rank", 4));
+			headerMap.insert(Name,        QString("%1 ").arg("Name", -25));
+			headerMap.insert(EloDiff,     QString("%1 ").arg("Elo", 7));
+			headerMap.insert(ErrorMargin, QString("%1 ").arg("+/-", 7));
+			headerMap.insert(Games,	      QString("%1 ").arg("Games", 7));
+			headerMap.insert(Points,      QString("%1 ").arg("Points", 8));
+			headerMap.insert(Score,	      QString("%1 ").arg("Score", 7));
+			headerMap.insert(WhitePoints,  QString("%1 ").arg("White", 7));
+			headerMap.insert(WhiteScore,  QString("%1 ").arg("wScore", 7));
+			headerMap.insert(BlackPoints,  QString("%1 ").arg("Black", 7));
+			headerMap.insert(BlackScore,  QString("%1 ").arg("bScore", 7));
+
+			ret += formatter.entry(headerMap);
+		}
+
+		int rank = hasGauntletRatingsOrder() ? -1 : 0;
+		for (auto it = ranking.constBegin(); it != ranking.constEnd(); ++it)
+		{
+			const RankingDataPoints data = it.value();
+			QMap<int, QString> dataMap;
+			dataMap.insert(Rank,       QString("%1 ").arg(++rank, 4));
+			dataMap.insert(Name,       QString("%1 ").arg(data.name, -25));
+			dataMap.insert(EloDiff,    QString("%1 ").arg(data.eloDiff, 7, 'f', 0));
+			dataMap.insert(ErrorMargin,QString("%1 ").arg(data.errorMargin, 7, 'f', 0));
+			dataMap.insert(Games,      QString("%1 ").arg(data.games, 7));
+			dataMap.insert(Points,     QString("%1 ").arg(data.points, 8,'f',4));
+			dataMap.insert(Score,      QString("%1% ").arg(data.score * 100.0, 6, 'f', 2));
+			dataMap.insert(WhitePoints,     QString("%1 ").arg(data.points, 8,'f',4));
+			dataMap.insert(WhiteScore,      QString("%1% ").arg(data.score * 100.0, 6, 'f', 2));
+			dataMap.insert(BlackPoints,     QString("%1 ").arg(data.points, 8,'f',4));
+			dataMap.insert(BlackScore,      QString("%1% ").arg(data.score * 100.0, 6, 'f', 2));
+
+			ret += formatter.entry(dataMap);
+		}
+	}
+
+
+	if(rMobType==m_rMobType)
+	{
+
+		Sprt::Status sprtStatus = sprt()->status();
+		if (sprtStatus.llr != 0.0
+		||  sprtStatus.lBound != 0.0
+		||  sprtStatus.uBound != 0.0)
+		{
+			QString sprtStr = QString("SPRT: llr %1 (%2%), lbound %3, ubound %4")
+				.arg(sprtStatus.llr, 0, 'g', 3)
+				.arg(sprtStatus.llr / sprtStatus.uBound * 100, 0, 'f', 1)
+				.arg(sprtStatus.lBound, 0, 'g', 3)
+				.arg(sprtStatus.uBound, 0, 'g', 3);
+			if (sprtStatus.result == Sprt::AcceptH0)
+				sprtStr.append(" - H0 was accepted");
+			else if (sprtStatus.result == Sprt::AcceptH1)
+				sprtStr.append(" - H1 was accepted");
+
+			ret += "\n" + sprtStr;
+		}
+	}
+	ret+="\n";
+	return ret;
+
+}
+
+template QString Tournament::subResults<Chess::Classical>() const;
+template QString Tournament::subResults<Chess::Exponential>() const;
+template QString Tournament::subResults<Chess::Harmonic>() const;
+template QString Tournament::subResults<Chess::AllOrNone>() const;
+template QString Tournament::subResults<Chess::Komi>() const;
+
 QString Tournament::results() const
 {
-	QMultiMap<qreal, RankingData> ranking;
+
 	QString ret;
+
+	QString rawData=QString("Raw r-Mobility Data: \n");
+	QString asWhite=QString("As White: \n");
+	QString asBlack=QString("As Black: \n");
+	for(int i=0;i<m_maxGScore+1;i++)
+	{
+		if(m_Objectives[i]+m_Objectives[875-i]>0)
+		{
+			rawData+=QString("%1 ").arg(tr("G%1.%2").arg(i/2).arg(5*(i%2)),7);
+			rawData+=QString("%1 ").arg(tr("-G%1.%2").arg(i/2).arg(5*(i%2)),7);
+		}
+	}
+	rawData+="\n";
+	for(int i=0; i<m_maxGScore+1;i++)
+	{
+		if(m_Objectives[i]+m_Objectives[875-i]>0)
+		{
+			rawData+=QString("%1 ").arg(m_Objectives[i], 7);
+			rawData+=QString("%1 ").arg(m_Objectives[875-i], 7);
+		}
+	}
+	rawData+="\n";
+	for(int i=0; i<m_maxGScore+1;i++)
+	{
+		if(m_Objectives[i]+m_Objectives[875-i]>0)
+		{
+			rawData+=QString("%1 %").arg(double(m_Objectives[i])/m_finishedGameCount*100, 6,'f',1);
+			rawData+=QString("%1 %").arg(double(m_Objectives[875-i])/m_finishedGameCount*100, 6,'f',1);
+		}
+	}
+	rawData+="\n\n";
+
+	rawData+="By players: \n";
+	rawData+=QString("%1 ").arg("Name", -25);
+	asWhite+=QString("%1 ").arg("Name", -25);
+	asBlack+=QString("%1 ").arg("Name", -25);
+
+	for(int i=0; i<m_maxGScore+1;i++)
+	{
+		if(m_Objectives[i]+m_Objectives[875-i]>0)
+		{
+			rawData+=QString("%1 ").arg(tr("G%1.%2").arg(i/2).arg(5*(i%2)),7);
+			rawData+=QString("%1 ").arg(tr("-G%1.%2").arg(i/2).arg(5*(i%2)),7);
+			asWhite+=QString("%1 ").arg(tr("G%1.%2").arg(i/2).arg(5*(i%2)),7);
+			asWhite+=QString("%1 ").arg(tr("-G%1.%2").arg(i/2).arg(5*(i%2)),7);
+			asBlack+=QString("%1 ").arg(tr("G%1.%2").arg(i/2).arg(5*(i%2)),7);
+			asBlack+=QString("%1 ").arg(tr("-G%1.%2").arg(i/2).arg(5*(i%2)),7);
+		}
+	}
+	rawData+="\n";
+	asWhite+="\n";
+	asBlack+="\n";
 
 	for (int i = 0; i < playerCount(); i++)
 	{
-		const TournamentPlayer& player(playerAt(i));
-		Elo elo(player.wins(), player.losses(), player.draws());
-		Elo whiteElo(player.whiteWins(),
-			     player.whiteLosses(),
-			     player.whiteDraws());
-		Elo blackElo(player.blackWins(),
-			     player.blackLosses(),
-			     player.blackDraws());
 
-		if (playerCount() == 2)
+		TournamentPlayer player=playerAt(i);
+
+		rawData+=QString("%1 ").arg(player.name(), -25);
+
+		for(int i=0; i<m_maxGScore+1;i++)
 		{
-			ret += resultsForSides(0);
-			ret += QString("Elo difference: %1 +/- %2, LOS: %3 %, DrawRatio: %4 %")
-				.arg(elo.diff(), 0, 'f', 1)
-				.arg(elo.errorMargin(), 0, 'f', 1)
-				.arg(elo.LOS(), 0, 'f', 1)
-				.arg(elo.drawRatio() * 100, 0, 'f', 1);
-			break;
+			if(m_Objectives[i]+m_Objectives[875-i]>0)
+			{
+				rawData+=QString("%1 ").arg(player.objectives(i), 7);
+				rawData+=QString("%1 ").arg(player.objectives(875-i), 7);
+			}
+		}
+		rawData+="\n";
+
+		if(player.gamesFinished()>0)
+		{
+			rawData+=QString("%1 ").arg(tr("..."), -25);
+			for(int i=0; i<m_maxGScore+1;i++)
+			{
+				if(m_Objectives[i]+m_Objectives[875-i]>0)
+				{
+					rawData+=QString("%1 %").arg(double(player.objectives(i))/player.gamesFinished()*100, 6,'f',1);
+					rawData+=QString("%1 %").arg(double(player.objectives(875-i))/player.gamesFinished()*100, 6,'f',1);
+				}
+			}
+			rawData+="\n";
 		}
 
-		RankingData data = { player.name(),
-				     player.gamesFinished(),
-				     player.wins(),
-				     player.losses(),
-				     player.draws(),
-				     player.whiteWins(),
-				     player.whiteLosses(),
-				     player.whiteDraws(),
-				     player.blackWins(),
-				     player.blackLosses(),
-				     player.blackDraws(),
-				     player.score() / 2.,
-				     elo.pointRatio(),
-				     elo.drawRatio(),
-				     elo.diff(),
-				     elo.errorMargin(),
-				     elo.LOS(),
-				     whiteElo.pointRatio(),
-				     whiteElo.drawRatio(),
-				     whiteElo.diff(),
-				     whiteElo.errorMargin(),
-				     whiteElo.LOS(),
-				     blackElo.pointRatio(),
-				     blackElo.drawRatio(),
-				     blackElo.diff(),
-				     blackElo.errorMargin(),
-				     blackElo.LOS() };
+		asWhite+=QString("%1 ").arg(player.name(), -25);
 
-		// Order players like this:
-		// 1. Gauntlet player (if any)
-		// 2. Players with finished games, sorted by point ratio
-		// 3. Players without finished games
-		qreal key = -1.0;
-		if ((i > 0 && i >= seedCount()) || !hasGauntletRatingsOrder())
+		for(int i=0; i<m_maxGScore+1;i++)
 		{
-			if (data.games)
-				key = 1.0 - data.score;
-			else
-				key = 2.0;
+			if(m_Objectives[i]+m_Objectives[875-i]>0)
+			{
+				asWhite+=QString("%1 ").arg(player.whiteObjectives(i), 7);
+				asWhite+=QString("%1 ").arg(player.whiteObjectives(875-i), 7);
+			}
 		}
-		ranking.insert(key, data);
+		asWhite+="\n";
+
+		if(player.nWhiteGames()>0)
+		{
+			asWhite+=QString("%1 ").arg(tr("..."), -25);
+			for(int i=0; i<m_maxGScore+1;i++)
+			{
+				if(m_Objectives[i]+m_Objectives[875-i]>0)
+				{
+					asWhite+=QString("%1 %").arg(double(player.whiteObjectives(i))/player.nWhiteGames()*100, 6,'f',1);
+					asWhite+=QString("%1 %").arg(double(player.whiteObjectives(875-i))/player.nWhiteGames()*100, 6,'f',1);
+				}
+			}
+			asWhite+="\n";
+		}
+
+		asBlack+=QString("%1 ").arg(player.name(), -25);
+
+		for(int i=0; i<m_maxGScore+1;i++)
+		{
+			if(m_Objectives[i]+m_Objectives[875-i]>0)
+			{
+				asBlack+=QString("%1 ").arg(player.blackObjectives(i), 7);
+				asBlack+=QString("%1 ").arg(player.blackObjectives(875-i), 7);
+			}
+		}
+		asBlack+="\n";
+
+		if(player.gamesFinished()-player.nWhiteGames()>0)
+		{
+
+			asBlack+=QString("%1 ").arg(tr("..."), -25);
+			for(int i=0; i<m_maxGScore+1;i++)
+			{
+				if(m_Objectives[i]+m_Objectives[875-i]>0)
+				{
+					asBlack+=QString("%1 %").arg(double(player.blackObjectives(i))/(player.gamesFinished()-player.nWhiteGames())*100, 6,'f',1);
+					asBlack+=QString("%1 %").arg(double(player.whiteObjectives(875-i))/(player.gamesFinished()-player.nWhiteGames())*100, 6,'f',1);
+				}
+			}
+			asBlack+="\n";
+		}
+
+
+
+
+
 	}
+	ret+=rawData +"\n"+asWhite+"\n"+asBlack+"\n";
 
-	//First assign raw format string, then try to find named format
-	QString format = m_resultFormat;
-	if (m_namedFormats.contains(m_resultFormat))
-		format = m_namedFormats[m_resultFormat];
-
-	ResultFormatter formatter(m_tokenMap, format);
-	QMap<int,QString> headerMap;
-
-	if (!ranking.isEmpty())
+	ret+=*((playerCount()==2) ? "Match":"Tournament") +" result: " + Chess::rMobScoringName(m_rMobType) + " Scoring:\n";
+	switch(m_rMobType)
 	{
-		headerMap.insert(Rank,        QString("%1 ").arg("Rank", 4));
-		headerMap.insert(Name,        QString("%1 ").arg("Name", -25));
-		headerMap.insert(EloDiff,     QString("%1 ").arg("Elo", 7));
-		headerMap.insert(ErrorMargin, QString("%1 ").arg("+/-", 7));
-		headerMap.insert(Games,	      QString("%1 ").arg("Games", 7));
-		headerMap.insert(Wins,	      QString("%1 ").arg("Wins", 7));
-		headerMap.insert(Losses,      QString("%1 ").arg("Losses", 7));
-		headerMap.insert(Draws,       QString("%1 ").arg("Draws", 7));
-		headerMap.insert(Points,      QString("%1 ").arg("Points", 8));
-		headerMap.insert(Score,	      QString("%1 ").arg("Score", 7));
-		headerMap.insert(DrawScore,   QString("%1 ").arg("Draw", 7));
-		headerMap.insert(WhiteScore,  QString("%1 ").arg("White", 7));
-		headerMap.insert(BlackScore,  QString("%1 ").arg("Black", 7));
-		headerMap.insert(WhiteDrawScore,  QString("%1 ").arg("WDraw", 7));
-		headerMap.insert(BlackDrawScore,  QString("%1 ").arg("BDraw", 7));
-		headerMap.insert(WhiteWins,   QString("%1 ").arg("WWins", 7));
-		headerMap.insert(WhiteLosses, QString("%1 ").arg("WLoss.", 7));
-		headerMap.insert(WhiteDraws,  QString("%1 ").arg("WDraws", 7));
-		headerMap.insert(BlackWins,   QString("%1 ").arg("BWins", 7));
-		headerMap.insert(BlackLosses, QString("%1 ").arg("BLoss.", 7));
-		headerMap.insert(BlackDraws,  QString("%1 ").arg("BDraws", 7));
+	case Chess::Classical:
+		ret+=subResults<Chess::Classical>();
+		break;
 
-		ret += formatter.entry(headerMap);
+	case Chess::Harmonic:
+		ret+=subResults<Chess::Classical>();
+		break;
+
+	case Chess::AllOrNone:
+		ret+=subResults<Chess::AllOrNone>();
+		break;
+
+	case Chess::Komi:
+		ret+=subResults<Chess::Komi>();
+		break;
+
+	default:
+		ret+=subResults<Chess::Exponential>();
 	}
 
-	int rank = hasGauntletRatingsOrder() ? -1 : 0;
-	for (auto it = ranking.constBegin(); it != ranking.constEnd(); ++it)
+	ret+="\nAlternative Scorings:";
+	if(m_rMobType!=Chess::Classical)
 	{
-		const RankingData& data = it.value();
-		QMap<int, QString> dataMap;
-		dataMap.insert(Rank,       QString("%1 ").arg(++rank, 4));
-		dataMap.insert(Name,       QString("%1 ").arg(data.name, -25));
-		dataMap.insert(EloDiff,    QString("%1 ").arg(data.eloDiff, 7, 'f', 0));
-		dataMap.insert(ErrorMargin,QString("%1 ").arg(data.errorMargin, 7, 'f', 0));
-		dataMap.insert(Games,      QString("%1 ").arg(data.games, 7));
-		dataMap.insert(Wins,       QString("%1 ").arg(data.wins, 7));
-		dataMap.insert(Losses,     QString("%1 ").arg(data.losses, 7));
-		dataMap.insert(Draws,      QString("%1 ").arg(data.draws, 7));
-		dataMap.insert(Points,     QString("%1 ").arg(data.points, 8,'f',1));
-		dataMap.insert(Score,      QString("%1% ").arg(data.score * 100.0, 6, 'f', 1));
-		dataMap.insert(DrawScore,  QString("%1% ").arg(data.drawScore * 100.0, 6, 'f', 1));
-		dataMap.insert(WhiteScore, QString("%1% ").arg(data.whiteScore * 100.0, 6, 'f', 1));
-		dataMap.insert(BlackScore, QString("%1% ").arg(data.blackScore * 100.0, 6, 'f', 1));
-		dataMap.insert(WhiteDrawScore,
-			       QString("%1% ").arg(data.whiteDrawScore * 100.0, 6, 'f', 1));
-		dataMap.insert(BlackDrawScore,
-			       QString("%1% ").arg(data.blackDrawScore * 100.0, 6, 'f', 1));
-		dataMap.insert(WhiteWins,  QString("%1 ").arg(data.whiteWins, 7));
-		dataMap.insert(WhiteLosses,QString("%1 ").arg(data.whiteLosses, 7));
-		dataMap.insert(WhiteDraws, QString("%1 ").arg(data.whiteDraws, 7));
-		dataMap.insert(BlackWins,  QString("%1 ").arg(data.blackWins, 7));
-		dataMap.insert(BlackLosses,QString("%1 ").arg(data.blackLosses, 7));
-		dataMap.insert(BlackDraws, QString("%1 ").arg(data.blackDraws, 7));
-		ret += formatter.entry(dataMap);
+		ret+="\nClassical Scoring:\n";
+		ret+=subResults<Chess::Classical>();
 	}
-
-	Sprt::Status sprtStatus = sprt()->status();
-	if (sprtStatus.llr != 0.0
-	||  sprtStatus.lBound != 0.0
-	||  sprtStatus.uBound != 0.0)
+	if(m_rMobType!=Chess::Exponential)
 	{
-		QString sprtStr = QString("SPRT: llr %1 (%2%), lbound %3, ubound %4")
-			.arg(sprtStatus.llr, 0, 'g', 3)
-			.arg(sprtStatus.llr / sprtStatus.uBound * 100, 0, 'f', 1)
-			.arg(sprtStatus.lBound, 0, 'g', 3)
-			.arg(sprtStatus.uBound, 0, 'g', 3);
-		if (sprtStatus.result == Sprt::AcceptH0)
-			sprtStr.append(" - H0 was accepted");
-		else if (sprtStatus.result == Sprt::AcceptH1)
-			sprtStr.append(" - H1 was accepted");
-
-		ret += "\n" + sprtStr;
+		ret+="\nExponential Scoring:\n";
+		ret+=subResults<Chess::Exponential>();
 	}
+	if(m_rMobType!=Chess::Harmonic)
+	{
+		ret+="\nHarmonic Scoring:\n";
+		ret+=subResults<Chess::Harmonic>();
+	}
+	if(m_rMobType!=Chess::AllOrNone)
+	{
+		ret+="\nRMobility Winner Scoring:\n";
+		ret+=subResults<Chess::AllOrNone>();
+	}
+	if(m_rMobType!=Chess::Komi)
+	{
+		ret+="\nKomi Scoring: \n";
+		ret+=subResults<Chess::Komi>();
+	}
+
+
 
 	return ret;
+
+
+
 }
 
 
@@ -1008,5 +1472,98 @@ QString ResultFormatter::entry(const QMap<int, QString>& data) const
 	}
 	ret.append("\n");
 	return ret;
+}
+
+void Tournament::setDefaultKomi(Chess::rMobKomi defaultKomi)
+{
+	m_defaultKomi=defaultKomi;
+}
+
+void Tournament::setCutoff(int cutoff)
+{
+	m_gCutoff=cutoff;
+}
+
+void Tournament::setLegacy(bool isLegacy)
+{
+	m_isLegacy=isLegacy;
+}
+
+void Tournament::setRMobType(Chess::rMobScoring rMobType)
+{
+	m_rMobType=rMobType;
+}
+
+Chess::rMobScoring Tournament::rMobType() const
+{
+	return m_rMobType;
+}
+
+QString Tournament::rMobPoints(const Chess::rMobResult& gResult, const Chess::rMobKomi& komi) const
+{
+	switch(m_rMobType)
+	{
+		case Chess::Classical:
+			if(gResult.gScore==0) return (gResult.gSide==Chess::Side::White) ? "1-0" : "0-1";
+			else return "1/2-1/2";
+
+		case Chess::AllOrNone:
+			if(gResult.gScore<m_gCutoff) return (gResult.gSide==Chess::Side::White) ? "1-0" : "0-1";
+			else return "1/2-1/2";
+
+		case Chess::Komi:
+			if(gResult.gSide==komi.gSide)
+				{
+					if(2*std::min(gResult.gScore,m_gCutoff)<komi.komi) return (gResult.gSide==Chess::Side::White) ? "1-0" : "0-1";
+					else if(2*std::min(gResult.gScore,m_gCutoff)>komi.komi) return (gResult.gSide==Chess::Side::White) ? "0-1" : "1-0";
+					else return "1/2-1/2";
+				}
+			else
+			{
+				if(komi.komi<2*m_gCutoff) return (gResult.gSide==Chess::Side::White) ? "1-0" : "0-1";
+				else if(komi.komi==2*m_gCutoff)
+				{
+					if(gResult.gScore>=m_gCutoff) return "1/2-1/2";
+					else return (gResult.gSide==Chess::Side::White) ? "1-0" : "0-1";
+				}
+				else
+				{
+					if(gResult.gScore>=m_gCutoff) return (gResult.gSide==Chess::Side::White) ? "0-1" : "1-0";
+					else return (gResult.gSide==Chess::Side::White) ? "1-0" : "0-1";
+				}
+			}
+
+		case Chess::Harmonic:
+		{
+			double bestScore=m_harmonicScoring->rValue(gResult.gScore);
+			return (gResult.gSide==Chess::Side::White) ? tr("%1-%2").arg(bestScore,0,'f',4).arg(1-bestScore,0,'f',4) : tr("%1-%2").arg(1-bestScore,0,'f',4).arg(bestScore,0,'f',4);
+		}
+
+		default:
+			double bestScore=m_exponentialScoring->rValue(gResult.gScore);
+			return (gResult.gSide==Chess::Side::White) ? tr("%1-%2").arg(bestScore,0,'f',4).arg(1-bestScore,0,'f',4) : tr("%1-%2").arg(1-bestScore,0,'f',4).arg(bestScore,0,'f',4);
+	}
+}
+
+qreal Tournament::playerPoints(int player) const
+{
+	switch(rMobType())
+	{
+	case Chess::Classical:
+		return playerAt(player).points<Chess::Classical>();
+
+	case Chess::Harmonic:
+		return playerAt(player).points<Chess::Harmonic>();
+
+	case Chess::AllOrNone:
+		return playerAt(player).points<Chess::AllOrNone>();
+
+	case Chess::Komi:
+		return playerAt(player).points<Chess::Komi>();
+
+	default:
+		return playerAt(player).points<Chess::Exponential>();
+
+	}
 }
 

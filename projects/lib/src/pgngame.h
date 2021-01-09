@@ -74,7 +74,7 @@ class LIB_EXPORT PgnGame
 		};
 
 		/*! Creates a new PgnGame object. */
-		PgnGame();
+		PgnGame(bool hasKomi=false, bool isLegacy=false);
 		/*! Returns true if the game doesn't contain any tags or moves. */
 		bool isNull() const;
 		/*! Deletes all tags and moves. */
@@ -205,6 +205,8 @@ class LIB_EXPORT PgnGame
 		/*! Returns QMap of scores extracted from PGN comments */
 		QMap<int, int> extractScores() const;
 
+		bool hasKomi() const;
+
 	private:
 		bool parseMove(PgnStream& in, bool addEco);
 		
@@ -216,6 +218,9 @@ class LIB_EXPORT PgnGame
 		QString m_initialComment;
 		static QString timeStamp(const QDateTime& dateTime);
 		QDateTime m_gameStartTime;
+		bool m_hasKomi;
+		bool m_isLegacy;
+
 };
 
 /*! Reads a PGN game from a PGN stream. */
@@ -225,3 +230,4 @@ extern LIB_EXPORT PgnStream& operator>>(PgnStream& in, PgnGame& game);
 extern LIB_EXPORT QTextStream& operator<<(QTextStream& out, const PgnGame& game);
 
 #endif // PGNGAME_H
+

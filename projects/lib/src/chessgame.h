@@ -77,6 +77,9 @@ class LIB_EXPORT ChessGame : public QObject
 		void lockThread();
 		void unlockThread();
 
+		Chess::rMobKomi komi() const;
+		void setKomi(Chess::rMobKomi komi);
+
 	public slots:
 		void start();
 		void pause();
@@ -143,6 +146,9 @@ class LIB_EXPORT ChessGame : public QObject
 		QSemaphore m_pauseSem;
 		QSemaphore m_resumeSem;
 		GameAdjudicator m_adjudicator;
+
+		Chess::rMobKomi m_komi;
+
 };
 
 #endif // CHESSGAME_H
