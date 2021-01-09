@@ -66,22 +66,77 @@ If G score is lower than cutoff (set in cli with `-rMobilityCutoff` option, for 
 
 ### Komi
 
-Set by `rMobilityType komi`
+#### Setting
 
-Komi can take integer, half-integer and quater-integer values.
+Set by `-rMobilityType komi`
 
-#### Komi behavior versus cutoff
+The komi is read from the opening (only compatible with PGN files), for example `[Komi "G4.25"]`, `[Komi "-G5.75"]`, `"[Komi "G2.0"]"`
 
+If no opening is provided, or if does not contain the `[Komi..` tag, a default komi will be used, which is set using`-defaultKomi`, for example:
+`-defaultKomi g5.0`, `-defaultKomi mg5.75` (m has to be used in lieu of - sign when setting the komi in cli). If this option is not set, default value is G5.75. it cannot be set in the GUI, therefore G5.75 will always be used if the opening does not provide a komi.
+
+#### Scoring
+
+Komi can take integer, half-integer and quater-integer values (G3.0, G3.25, G3.5, G3.75 are examples of possible Komi values). The player whose sign has the komi wins if he scores a better G-score, loses if he scores a worse G-score, draws if he scores exactly the Komi.
+
+Examples: If Komi is G2.25: white wins at G2.0 and losses at G2.5 (and at -G anything). If Komi is -G3.5, Black wins at -G3.0, draws at -G3.5 and loses at -G4.0 (an at any positive G-score).
+
+
+#### Komi behavior at and above cutoff
+
+All g-value above the cutoff are considered equivalent (a dead draw). if komi is set at the cutoff, a dead draw is scored as a draw: 0.5-0.5. If komi is set above the cutoff, it means that the player who has the komi (White is positive, Black is negative) has dead draw odds.
+
+Examples (in all examples below, cutoff is 6.0).
+Komi is G6.0 or -G6.0: White wins as G5.75 or better, Black wins at -G5.75 or better, any score G6.0 or higher, or -G6.0 or higher is a draw
+Komi is G6.25: White wins at any positive G score, and at a negative G score which is -G6.0 and above. Black needs -G5.75 or better to win. Draw is not possible.
+Komi is -G6.25: WHite needs G5.75 or better to win. Black wins at ny negative G-score, and at positive G-score G6.0 and above. Draw is not possible.
 
 
 
 ## Inputs and Outputs:
 
-### ptions in cli
+### Options in cli
+
+The below are the inputs options which are aded to the standard cutechess options (they all still work as usual except `-draw`; setting `-draw` won't break it but will be ignored).
+
+None of these options can be set in the GUI.
+
+`-rMopilityType`: values are `exponential` (default), `classical`, `harmonic`, `rMobilityWinner`, `komi`. Decides the main r-Mobility scoring (which will be consumed by SPTR and displayed after each game, and be written in the PGN output). Tournament results output always contains all tables with all possible scoring conventions.
+
+`-rMobilityCutoff`: sets the cutoff, in th format `gX.0`, `gX.5`, where `X` is an integer with any number of digits. Defaults to G6.0.
+
+`-legacyMode`: if passed, 50 moves rule will be per legacy mode. Defaults to non-legacy mode.
+
+`-defaultKomi`: the komi to use for komi scoring if not available in the opening., in the format `gX.0`, `gX.25`, `gX.5`, `gX.75` or `mGX.0`, `mGX.25`, `mGX.5`, `mGX.75` where `X` is an integer with any number of digits. Defaults to G5.75.
+
 
 ### FENs
 
+FENs (inputs and outputs) have an aditional accreted G-Score, as per the two below examples:
+`rnbqkbnr/pp2pppp/3p4/2p5/2P1P3/5N2/PP1P1PPP/RNBQKB1R b KQkq - 0 3 G28.5`
+`rnbqkbnr/1p2pppp/p2p4/2p5/2P1P3/2N2N2/PP1P1PPP/R1BQKB1R b KQkq - 1 4 -G26.5`
+
+If the 50 move rule ply count is 0 (as in fist example), this accreted G-score is redunant since the current position resets the G-score. It is also redunant if the score of the current FEN position is equal to this G-score (with same sign inclued) or is better (with any sign).
+
+FENs without this aditional field still work, and are understood as that the current position realizes the accreted G-score.
+
 ### PGNs
+
+As opening inputs, they can consume expanded starting FENs as describe above. They also consume a Komi field (`[Komi "G5.5"]`) to set the Komi of the game.
+
+As outputs:
+
+`[Result]` tag is the classical result of the game in the usual format (and the move scores also ends by the classical result of the game).
+
+`[RMobiliyResult]` is the GScore of the game.
+
+`[Points]` contains the points from the game as per the chosen scoring. If Classical, RMobilityWinner or Komi, format is "1-0";"0-1";"1/2-1/2". If Exponential or Harmonic, format is float with 4 decimal places, for example "0.6250 - 0.3750".
+
+`[RMobilityCutoff]` is the cutoff that was applied for the tournament.
+
+`[Komi]` is the komi at which the game was played, only present in th PGN output if the scoring mode of the tournament is Komi.
+
+If the tournament is in legacy mode, `[Legacy]` tag is added as such (without any value).
 
 ### ELO and LOS
 
