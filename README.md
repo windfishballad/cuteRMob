@@ -101,7 +101,7 @@ The below are the inputs options which are aded to the standard cutechess option
 
 None of these options can be set in the GUI.
 
-`-rMopilityType`: values are `exponential` (default), `classical`, `harmonic`, `rMobilityWinner`, `komi`. Decides the main r-Mobility scoring (which will be consumed by SPTR and displayed after each game, and be written in the PGN output). Tournament results output always contains all tables with all possible scoring conventions.
+`-rMobilityType`: values are `exponential` (default), `classical`, `harmonic`, `rMobilityWinner`, `komi`. Decides the main r-Mobility scoring (which will be consumed by SPTR and displayed after each game, and be written in the PGN output). Tournament results output always contains all tables with all possible scoring conventions.
 
 `-rMobilityCutoff`: sets the cutoff, in th format `gX.0`, `gX.5`, where `X` is an integer with any number of digits. Defaults to G6.0.
 
