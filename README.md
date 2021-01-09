@@ -20,7 +20,7 @@ Please refer to the main cutechess [page](https://github.com/cutechess/cutechess
 
 ## License
 
-Base cutechess code (except for the components in the projects/lib/components and the projects/gui components which are released under the MIT license) and r-Mobility additional code are released under the GPLv3+ license.
+Base cutechess code (except for the components in the `projects/lib/components` and the `projects/gui components` which are released under the MIT license) and r-Mobility additional code are released under the GPLv3+ license.
 
 ## Credits
 
