@@ -79,6 +79,8 @@ Chess::Result SyzygyTablebase::result(const Chess::Side& side,
 		return Chess::Result();
 	if (pieces.size() > s_pieces)
 		return Chess::Result();
+	if (rule50>0)
+		return Chess::Result();
 
 	bool wtm = (side == Chess::Side::White);
 	unsigned ep = (tbSquare(enpassantSq) < 0? 0: tbSquare(enpassantSq));
@@ -114,8 +116,8 @@ Chess::Result SyzygyTablebase::result(const Chess::Side& side,
 	}
 
 	s_mutex.lock();
-	unsigned result = tb_probe_root(white, black, kings, queens, rooks,
-		bishops, knights, pawns, rule50, 0, ep, wtm, nullptr);
+	unsigned result = tb_probe_wdl_impl(white, black, kings, queens, rooks,
+		bishops, knights, pawns, ep, wtm);
 	s_mutex.unlock();
 
 	Chess::Side winner(Chess::Side::NoSide); 
@@ -126,8 +128,8 @@ Chess::Result SyzygyTablebase::result(const Chess::Side& side,
 	else if (result == TB_RESULT_STALEMATE)
 		winner = Chess::Side::NoSide;
 	else
-	{
-		switch (TB_GET_WDL(result))
+
+	switch (TB_GET_WDL(result))
 		{
 		case TB_BLESSED_LOSS:
 			if (!s_noRule50)
@@ -144,9 +146,9 @@ Chess::Result SyzygyTablebase::result(const Chess::Side& side,
 			// Fallthrough
 		case TB_WIN:
 			winner = (wtm? Chess::Side::White: Chess::Side::Black);
-			break;
+				break;
 		}
-	}
+
 	if (dtz != nullptr)
 		*dtz = TB_GET_DTZ(result);
 	return Chess::Result(Chess::Result::Adjudication, winner, "SyzygyTB");

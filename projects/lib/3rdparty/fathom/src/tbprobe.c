@@ -1389,7 +1389,23 @@ static bool do_move(struct pos *pos, const struct pos *pos0, uint16_t move)
 
 static int probe_ab(const struct pos *pos, int alpha, int beta, int *success)
 {
-    int v;
+
+	int v;
+    int value = probe_wdl_table(pos, success);
+    if (*success == 0)
+    	return 0;
+
+    if (value > alpha)
+            {
+                if (value >= beta)
+                {
+                    *success = 2;
+                    return v;
+                }
+                alpha = value;
+            }
+
+
     uint16_t moves0[64];
     uint16_t *moves = moves0;
     uint16_t *end = gen_captures_or_promotions(pos, moves);
@@ -1414,10 +1430,8 @@ static int probe_ab(const struct pos *pos, int alpha, int beta, int *success)
         } 
     }
 
-    v = probe_wdl_table(pos, success);
-    if (*success == 0)
-        return 0;
-    if (alpha >= v)
+
+    if (alpha >= value)
     {
         *success = 1 + (alpha > 0);
         return alpha;
@@ -1700,9 +1714,12 @@ static uint16_t probe_root(const struct pos *pos, int *score,
     unsigned *results)
 {
     int success;
-    int dtz = probe_dtz(pos, &success);
+    int wdl=probe_wdl(pos, &success);
+
     if (!success)
         return 0;
+
+    int dtz=wdl_to_dtz[wdl+2];
 
     int16_t scores[MAX_MOVES];
     uint16_t moves0[MAX_MOVES];
