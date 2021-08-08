@@ -1395,16 +1395,6 @@ static int probe_ab(const struct pos *pos, int alpha, int beta, int *success)
     if (*success == 0)
     	return 0;
 
-    if (value > alpha)
-            {
-                if (value >= beta)
-                {
-                    *success = 2;
-                    return v;
-                }
-                alpha = value;
-            }
-
 
     uint16_t moves0[64];
     uint16_t *moves = moves0;
@@ -1439,7 +1429,7 @@ static int probe_ab(const struct pos *pos, int alpha, int beta, int *success)
     else
     {
         *success = 1;
-        return v;
+        return value;
     }
 }
 

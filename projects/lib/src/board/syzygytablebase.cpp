@@ -123,13 +123,8 @@ Chess::Result SyzygyTablebase::result(const Chess::Side& side,
 	Chess::Side winner(Chess::Side::NoSide); 
 	if (result == TB_RESULT_FAILED)
 		return Chess::Result();
-	if (result == TB_RESULT_CHECKMATE)
-		winner = (wtm? Chess::Side::Black: Chess::Side::White);
-	else if (result == TB_RESULT_STALEMATE)
-		winner = Chess::Side::NoSide;
-	else
 
-	switch (TB_GET_WDL(result))
+	switch (result)
 		{
 		case TB_BLESSED_LOSS:
 			if (!s_noRule50)
