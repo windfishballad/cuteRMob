@@ -1049,6 +1049,82 @@ static uint16_t *gen_captures_or_promotions(const struct pos *pos,
 }
 
 /*
+* Generate all captures
+*/
+
+static uint16_t *gen_captures(const struct pos *pos,
+    uint16_t *moves)
+{
+    uint64_t occ = pos->white | pos->black;
+    uint64_t us = (pos->turn? pos->white: pos->black),
+             them = (pos->turn? pos->black: pos->white);
+    uint64_t b, att;
+    {
+        unsigned from = lsb(pos->kings & us);
+        for (att = king_attacks(from) & them; att; att = poplsb(att))
+        {
+            unsigned to = lsb(att);
+            moves = add_move(moves, false, from, to);
+        }
+    }
+    for (b = us & pos->queens; b; b = poplsb(b))
+    {
+        unsigned from = lsb(b);
+        for (att = queen_attacks(from, occ) & them; att; att = poplsb(att))
+        {
+            unsigned to = lsb(att);
+            moves = add_move(moves, false, from, to);
+        }
+    }
+    for (b = us & pos->rooks; b; b = poplsb(b))
+    {
+        unsigned from = lsb(b);
+        for (att = rook_attacks(from, occ) & them; att; att = poplsb(att))
+        {
+            unsigned to = lsb(att);
+            moves = add_move(moves, false, from, to);
+        }
+    }
+    for (b = us & pos->bishops; b; b = poplsb(b))
+    {
+        unsigned from = lsb(b);
+        for (att = bishop_attacks(from, occ) & them; att; att = poplsb(att))
+        {
+            unsigned to = lsb(att);
+            moves = add_move(moves, false, from, to);
+        }
+    }
+    for (b = us & pos->knights; b; b = poplsb(b))
+    {
+        unsigned from = lsb(b);
+        for (att = knight_attacks(from) & them; att; att = poplsb(att))
+        {
+            unsigned to = lsb(att);
+            moves = add_move(moves, false, from, to);
+        }
+    }
+    for (b = us & pos->pawns; b; b = poplsb(b))
+    {
+        unsigned from = lsb(b);
+        att = pawn_attacks(from, pos->turn);
+        if (pos->ep != 0 && ((att & board(pos->ep)) != 0))
+        {
+            unsigned to = pos->ep;
+            moves = add_move(moves, false, from, to);
+        }
+        for (att = att & them; att; att = poplsb(att))
+        {
+            unsigned to = lsb(att);
+            moves = add_move(moves, (rank(to) == 7 || rank(to) == 0), from,
+                to);
+        }
+    }
+    return moves;
+}
+
+
+
+/*
  * Generate all non-capture pawn moves and promotions.
  */
 static uint16_t *gen_pawn_quiets_or_promotions(const struct pos *pos,
@@ -1396,16 +1472,21 @@ static int probe_ab(const struct pos *pos, int alpha, int beta, int *success)
     	return 0;
 
 
-    uint16_t moves0[64];
+    uint16_t moves0[MAX_MOVES];
     uint16_t *moves = moves0;
-    uint16_t *end = gen_captures_or_promotions(pos, moves);
+
+    uint16_t *end = gen_captures(pos, moves);
+
+    int capturesCounter=0;
+
     for (; moves < end; moves++)
     {
-        if (is_en_passant(pos, *moves))
-            continue;
         struct pos pos1;
         if (!do_move(&pos1, pos, *moves))
             continue;
+
+        ++capturesCounter;
+
         v = -probe_ab(&pos1, -beta, -alpha, success);
         if (*success == 0) 
             return 0;
@@ -1420,6 +1501,23 @@ static int probe_ab(const struct pos *pos, int alpha, int beta, int *success)
         } 
     }
 
+    moves=moves0;
+    end=gen_moves(pos,moves);
+
+    int movesCounter=0;
+
+    for(; moves<end;moves++)
+    {
+    	struct pos pos1;
+    	if (!do_move(&pos1, pos, *moves))
+    	            continue;
+    	++movesCounter;
+    }
+
+    if(movesCounter<=capturesCounter)
+    {
+    	return alpha;
+    }
 
     if (alpha >= value)
     {
